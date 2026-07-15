@@ -1,0 +1,10 @@
+menu "STSW-ST25RFAL002 Configuration"
+choice STSW_ST25RFAL002_CHIP
+    prompt "ST25R Chip"
+        default STSW_ST25RFAL002_CHIP_ST25R3916
+    config STSW_ST25RFAL002_CHIP_ST25R3916
+        bool "ST25R3916"
+    config STSW_ST25RFAL002_CHIP_ST25R3916B
+        bool "ST25R3916B"
+    endchoice
+endmenu
