@@ -63,6 +63,13 @@ your_project/
 └── CMakeLists.txt
 ```
 
+Clone commands:
+
+```bash
+git clone https://github.com/Llgok/cpp_bus_driver.git
+git clone https://github.com/Llgok/stsw-st25rfal002_cpp_bus_driver.git
+```
+
 Then include the unified entry header:
 
 ```cpp

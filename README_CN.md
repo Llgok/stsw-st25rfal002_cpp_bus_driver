@@ -58,6 +58,13 @@ your_project/
 └── CMakeLists.txt
 ```
 
+克隆命令：
+
+```bash
+git clone https://github.com/Llgok/cpp_bus_driver.git
+git clone https://github.com/Llgok/stsw-st25rfal002_cpp_bus_driver.git
+```
+
 然后包含统一入口头文件：
 
 ```cpp
