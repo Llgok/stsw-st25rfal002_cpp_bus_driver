@@ -19,6 +19,7 @@ enum class PlatformError : uint8_t {
   kResourceAllocationFailed,
   kGpioFailed,
   kSpiFailed,
+  kI2cFailed,
   kInterruptFailed,
   kAssertionFailed,
   kOfficialErrorHandler,

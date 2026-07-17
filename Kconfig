@@ -7,4 +7,14 @@ choice STSW_ST25RFAL002_CHIP
     config STSW_ST25RFAL002_CHIP_ST25R3916B
         bool "ST25R3916B"
     endchoice
+
+choice STSW_ST25RFAL002_TRANSPORT
+    prompt "ST25R3916 transport"
+        default STSW_ST25RFAL002_TRANSPORT_I2C if LILYGO_DEVICE_DRIVER_T_DISPLAY_P4_AIR
+        default STSW_ST25RFAL002_TRANSPORT_SPI
+    config STSW_ST25RFAL002_TRANSPORT_SPI
+        bool "SPI"
+    config STSW_ST25RFAL002_TRANSPORT_I2C
+        bool "I2C"
+    endchoice
 endmenu

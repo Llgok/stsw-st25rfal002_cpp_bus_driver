@@ -20,12 +20,19 @@ std::atomic<RfalPlatformContext*> RfalPlatformContext::active_context_ =
 std::atomic<TaskHandle_t> RfalPlatformContext::interrupt_task_for_isr_ =
     nullptr;
 
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+RfalPlatformContext::RfalPlatformContext(
+    std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus, int32_t interrupt_pin,
+    uint16_t address)
+    : bus_(std::move(bus)), interrupt_pin_(interrupt_pin), address_(address) {}
+#else
 RfalPlatformContext::RfalPlatformContext(
     std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus, int32_t interrupt_pin,
     int32_t chip_select_pin)
     : bus_(std::move(bus)),
       interrupt_pin_(interrupt_pin),
       chip_select_pin_(chip_select_pin) {}
+#endif
 
 RfalPlatformContext::~RfalPlatformContext() {
   Deinit(false);
@@ -57,13 +64,22 @@ void RfalPlatformContext::Unbind() {
   bound_ = false;
 }
 
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+bool RfalPlatformContext::Init(uint32_t frequency_hz) {
+#else
 bool RfalPlatformContext::Init(int32_t frequency_hz) {
+#endif
   ClearError();
   if (bus_initialized_) {
     return true;
   }
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+  if (bus_ == nullptr || interrupt_pin_ < 0 || address_ > 0x7F ||
+      frequency_hz == 0 || frequency_hz > kMaximumI2cFrequencyHz) {
+#else
   if (bus_ == nullptr || interrupt_pin_ < 0 || chip_select_pin_ < 0 ||
       frequency_hz <= 0 || frequency_hz > kMaximumSpiFrequencyHz) {
+#endif
     SetError(PlatformError::kInvalidConfiguration,
         "Invalid ST25R3916 platform configuration");
     return false;
@@ -71,11 +87,19 @@ bool RfalPlatformContext::Init(int32_t frequency_hz) {
   if (!bound_ && !Bind()) {
     return false;
   }
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+  if (!bus_->Init(frequency_hz, address_)) {
+    SetError(PlatformError::kI2cFailed,
+        "Failed to initialize the ST25R3916 I2C device");
+    return false;
+  }
+#else
   if (!bus_->Init(frequency_hz, chip_select_pin_)) {
     SetError(PlatformError::kSpiFailed,
         "Failed to initialize the ST25R3916 SPI device");
     return false;
   }
+#endif
   bus_initialized_ = true;
 
   if (!CreateResources()) {
@@ -105,13 +129,25 @@ bool RfalPlatformContext::Deinit(bool delete_bus) {
 
   if (bus_initialized_) {
     if (!bus_->Deinit(delete_bus)) {
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+      SetError(PlatformError::kI2cFailed,
+          "Failed to deinitialize the ST25R3916 I2C device");
+#else
       SetError(PlatformError::kSpiFailed,
           "Failed to deinitialize the ST25R3916 SPI device");
+#endif
       result = false;
     }
     bus_initialized_ = false;
   }
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+  i2c_started_ = false;
+  i2c_repeat_started_ = false;
+  i2c_address_valid_ = false;
+  i2c_transmit_length_ = 0;
+#else
   spi_selected_ = false;
+#endif
   return result;
 }
 
@@ -190,6 +226,90 @@ bool RfalPlatformContext::InterruptPinIsHigh() const {
   return bus_ != nullptr && bus_->GpioRead(interrupt_pin_);
 }
 
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+void RfalPlatformContext::I2cStart() {
+  i2c_started_ = true;
+  i2c_repeat_started_ = false;
+  i2c_address_valid_ = false;
+  i2c_transmit_length_ = 0;
+}
+
+void RfalPlatformContext::I2cStop() {
+  i2c_started_ = false;
+  i2c_repeat_started_ = false;
+  i2c_address_valid_ = false;
+  i2c_transmit_length_ = 0;
+}
+
+void RfalPlatformContext::I2cRepeatStart() {
+  if (!i2c_started_) {
+    SetError(PlatformError::kInvalidConfiguration,
+        "Invalid ST25R3916 I2C repeated start");
+    return;
+  }
+  i2c_repeat_started_ = true;
+  i2c_address_valid_ = false;
+}
+
+void RfalPlatformContext::I2cSlaveAddressWrite(uint8_t address) {
+  i2c_address_valid_ = i2c_started_ && address == address_;
+  if (!i2c_address_valid_) {
+    SetError(PlatformError::kInvalidConfiguration,
+        "Invalid ST25R3916 I2C write address");
+  }
+}
+
+void RfalPlatformContext::I2cSlaveAddressRead(uint8_t address) {
+  i2c_address_valid_ =
+      i2c_started_ && i2c_repeat_started_ && address == address_;
+  if (!i2c_address_valid_) {
+    SetError(PlatformError::kInvalidConfiguration,
+        "Invalid ST25R3916 I2C read address");
+  }
+}
+
+void RfalPlatformContext::I2cTransmit(
+    const uint8_t* buffer, uint16_t length, bool last, bool transmit_only) {
+  if (length == 0) {
+    return;
+  }
+  if (!bus_initialized_ || bus_ == nullptr || buffer == nullptr ||
+      !i2c_started_ || !i2c_address_valid_ || i2c_repeat_started_ ||
+      i2c_transmit_length_ + length > i2c_transmit_buffer_.size()) {
+    SetError(PlatformError::kInvalidConfiguration,
+        "Invalid ST25R3916 I2C transmit transaction");
+    return;
+  }
+
+  std::memcpy(
+      i2c_transmit_buffer_.data() + i2c_transmit_length_, buffer, length);
+  i2c_transmit_length_ += length;
+  if (last && transmit_only &&
+      !bus_->Write(i2c_transmit_buffer_.data(), i2c_transmit_length_)) {
+    SetError(PlatformError::kI2cFailed, "ST25R3916 I2C write failed");
+  }
+}
+
+void RfalPlatformContext::I2cReceive(uint8_t* buffer, uint16_t length) {
+  if (length == 0) {
+    return;
+  }
+  if (!bus_initialized_ || bus_ == nullptr || buffer == nullptr ||
+      !i2c_started_ || !i2c_repeat_started_ || !i2c_address_valid_) {
+    SetError(PlatformError::kInvalidConfiguration,
+        "Invalid ST25R3916 I2C receive transaction");
+    return;
+  }
+
+  const bool result = i2c_transmit_length_ == 0
+                          ? bus_->Read(buffer, length)
+                          : bus_->WriteRead(i2c_transmit_buffer_.data(),
+                                i2c_transmit_length_, buffer, length);
+  if (!result) {
+    SetError(PlatformError::kI2cFailed, "ST25R3916 I2C read failed");
+  }
+}
+#else
 void RfalPlatformContext::SpiSelect() { spi_selected_ = true; }
 
 void RfalPlatformContext::SpiDeselect() { spi_selected_ = false; }
@@ -227,6 +347,7 @@ void RfalPlatformContext::SpiTransceive(
     SetError(PlatformError::kSpiFailed, "ST25R3916 SPI transaction failed");
   }
 }
+#endif
 
 uint32_t RfalPlatformContext::GetSystemTick() const {
   if (bus_ == nullptr) {
@@ -266,8 +387,7 @@ RfalPlatformContext* RfalPlatformContext::active() {
 
 void IRAM_ATTR RfalPlatformContext::InterruptHandler(void* argument) {
   static_cast<void>(argument);
-  TaskHandle_t task =
-      interrupt_task_for_isr_.load(std::memory_order_acquire);
+  TaskHandle_t task = interrupt_task_for_isr_.load(std::memory_order_acquire);
   if (task == nullptr) {
     return;
   }
@@ -357,8 +477,9 @@ void RfalPlatformContext::StopInterruptTask() {
 
   stopping_.store(true);
   xTaskNotifyGive(task);
-  const bool stopped = task_stopped_ != nullptr &&
-                       xSemaphoreTake(task_stopped_, kTaskStopTimeout) == pdTRUE;
+  const bool stopped =
+      task_stopped_ != nullptr &&
+      xSemaphoreTake(task_stopped_, kTaskStopTimeout) == pdTRUE;
   if (!stopped) {
     SetError(PlatformError::kInterruptFailed,
         "Timed out while stopping the ST25R3916 interrupt task");
@@ -432,6 +553,50 @@ extern "C" bool rfalPlatformGpioIsHigh(void) {
   return platform != nullptr && platform->InterruptPinIsHigh();
 }
 
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+extern "C" void rfalPlatformI2cStart(void) {
+  if (auto* platform = ActivePlatform(); platform != nullptr) {
+    platform->I2cStart();
+  }
+}
+
+extern "C" void rfalPlatformI2cStop(void) {
+  if (auto* platform = ActivePlatform(); platform != nullptr) {
+    platform->I2cStop();
+  }
+}
+
+extern "C" void rfalPlatformI2cRepeatStart(void) {
+  if (auto* platform = ActivePlatform(); platform != nullptr) {
+    platform->I2cRepeatStart();
+  }
+}
+
+extern "C" void rfalPlatformI2cSlaveAddressWrite(uint8_t address) {
+  if (auto* platform = ActivePlatform(); platform != nullptr) {
+    platform->I2cSlaveAddressWrite(address);
+  }
+}
+
+extern "C" void rfalPlatformI2cSlaveAddressRead(uint8_t address) {
+  if (auto* platform = ActivePlatform(); platform != nullptr) {
+    platform->I2cSlaveAddressRead(address);
+  }
+}
+
+extern "C" void rfalPlatformI2cTransmit(
+    const uint8_t* buffer, uint16_t length, bool last, bool transmit_only) {
+  if (auto* platform = ActivePlatform(); platform != nullptr) {
+    platform->I2cTransmit(buffer, length, last, transmit_only);
+  }
+}
+
+extern "C" void rfalPlatformI2cReceive(uint8_t* buffer, uint16_t length) {
+  if (auto* platform = ActivePlatform(); platform != nullptr) {
+    platform->I2cReceive(buffer, length);
+  }
+}
+#else
 extern "C" void rfalPlatformSpiSelect(void) {
   if (auto* platform = ActivePlatform(); platform != nullptr) {
     platform->SpiSelect();
@@ -450,6 +615,7 @@ extern "C" void rfalPlatformSpiTransceive(
     platform->SpiTransceive(transmit_buffer, receive_buffer, length);
   }
 }
+#endif
 
 extern "C" uint32_t rfalPlatformGetSystemTick(void) {
   auto* platform = ActivePlatform();

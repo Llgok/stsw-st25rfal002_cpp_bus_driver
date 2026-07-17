@@ -12,6 +12,7 @@
 
 #include "bus/bus_guide.h"
 #include "platform/rfal_platform_status.h"
+#include "sdkconfig.h"
 
 extern "C" {
 #include "rfal_nfc.h"
@@ -30,11 +31,20 @@ class RfalPlatformContext;
  */
 class St25r3916 final {
  public:
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+  static constexpr uint32_t kDefaultI2cFrequencyHz = 400000;
+  static constexpr uint32_t kMaximumI2cFrequencyHz = 1000000;
+  static constexpr uint16_t kDefaultI2cAddress = 0x50;
+
+  St25r3916(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
+      int32_t interrupt_pin, uint16_t address = kDefaultI2cAddress);
+#else
   static constexpr int32_t kDefaultSpiFrequencyHz = 5000000;
   static constexpr int32_t kMaximumSpiFrequencyHz = 10000000;
 
   St25r3916(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
       int32_t interrupt_pin, int32_t chip_select_pin);
+#endif
 
   ~St25r3916();
 
@@ -49,7 +59,11 @@ class St25r3916 final {
    * @param frequency_hz SPI 时钟频率，单位为 Hz，默认 5 MHz，最大 10 MHz
    * @return 官方 RFAL 返回码
    */
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+  ReturnCode Init(uint32_t frequency_hz = kDefaultI2cFrequencyHz);
+#else
   ReturnCode Init(int32_t frequency_hz = kDefaultSpiFrequencyHz);
+#endif
 
   /**
    * @brief 反初始化 RFAL 并释放硬件资源

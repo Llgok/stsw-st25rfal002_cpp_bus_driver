@@ -13,14 +13,25 @@
 
 namespace stsw_st25rfal002_cpp_bus_driver {
 
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+St25r3916::St25r3916(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
+    int32_t interrupt_pin, uint16_t address)
+    : platform_(std::make_unique<RfalPlatformContext>(
+          std::move(bus), interrupt_pin, address)) {}
+#else
 St25r3916::St25r3916(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
     int32_t interrupt_pin, int32_t chip_select_pin)
     : platform_(std::make_unique<RfalPlatformContext>(
           std::move(bus), interrupt_pin, chip_select_pin)) {}
+#endif
 
 St25r3916::~St25r3916() { Deinit(false); }
 
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+ReturnCode St25r3916::Init(uint32_t frequency_hz) {
+#else
 ReturnCode St25r3916::Init(int32_t frequency_hz) {
+#endif
   if (initialized_) {
     return RFAL_ERR_NONE;
   }

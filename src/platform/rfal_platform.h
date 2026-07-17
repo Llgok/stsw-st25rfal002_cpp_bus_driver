@@ -28,6 +28,10 @@
 #error "No ST25R device selected"
 #endif
 
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+#define RFAL_USE_I2C
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -109,6 +113,17 @@ void rfalPlatformInterruptSetCallback(RfalPlatformInterruptCallback callback);
  */
 bool rfalPlatformGpioIsHigh(void);
 
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+// I2C 事务适配。官方通信层的分段调用会在平台层合并为一次原子传输。
+void rfalPlatformI2cStart(void);
+void rfalPlatformI2cStop(void);
+void rfalPlatformI2cRepeatStart(void);
+void rfalPlatformI2cSlaveAddressWrite(uint8_t address);
+void rfalPlatformI2cSlaveAddressRead(uint8_t address);
+void rfalPlatformI2cTransmit(
+    const uint8_t* buffer, uint16_t length, bool last, bool transmit_only);
+void rfalPlatformI2cReceive(uint8_t* buffer, uint16_t length);
+#else
 // SPI 事务适配。
 
 /**
@@ -136,6 +151,7 @@ void rfalPlatformSpiDeselect(void);
  */
 void rfalPlatformSpiTransceive(
     const uint8_t* transmit_buffer, uint8_t* receive_buffer, uint16_t length);
+#endif
 
 // 系统时钟、软件计时器和延时。
 
@@ -216,9 +232,11 @@ void rfalPlatformErrorHandle(const char* file, int line);
 #define ST25R_INT_PORT 0U
 #define ST25R_INT_PIN 0U
 
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_SPI)
 // 将每条 ST25R3916 命令合并到一次由硬件控制片选的 SPI 事务中。
 #ifndef ST25R_COM_SINGLETXRX
 #define ST25R_COM_SINGLETXRX
+#endif
 #endif
 
 #define platformProtectST25RComm() rfalPlatformProtectCommunication()
@@ -233,10 +251,22 @@ void rfalPlatformErrorHandle(const char* file, int line);
   rfalPlatformInterruptSetCallback(callback)
 #define platformGpioIsHigh(port, pin) rfalPlatformGpioIsHigh()
 
+#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+#define platformI2CStart() rfalPlatformI2cStart()
+#define platformI2CStop() rfalPlatformI2cStop()
+#define platformI2CRepeatStart() rfalPlatformI2cRepeatStart()
+#define platformI2CSlaveAddrWR(address) \
+  rfalPlatformI2cSlaveAddressWrite(address)
+#define platformI2CSlaveAddrRD(address) rfalPlatformI2cSlaveAddressRead(address)
+#define platformI2CTx(buffer, length, last, transmit_only) \
+  rfalPlatformI2cTransmit((buffer), (length), (last), (transmit_only))
+#define platformI2CRx(buffer, length) rfalPlatformI2cReceive((buffer), (length))
+#else
 #define platformSpiSelect() rfalPlatformSpiSelect()
 #define platformSpiDeselect() rfalPlatformSpiDeselect()
 #define platformSpiTxRx(tx_buffer, rx_buffer, length) \
   rfalPlatformSpiTransceive((tx_buffer), (rx_buffer), (length))
+#endif
 
 #define platformGetSysTick() rfalPlatformGetSystemTick()
 #define platformTimerCreate(timeout_ms) rfalPlatformTimerCreate(timeout_ms)

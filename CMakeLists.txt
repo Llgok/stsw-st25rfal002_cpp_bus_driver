@@ -56,11 +56,13 @@ idf_component_register(
 
 # ST 通信层将每条命令和响应合并为一次全双工传输，cpp_bus_driver 可以在
 # 不修改官方源码的前提下管理完整事务的片选信号。
-target_compile_definitions(
-        ${COMPONENT_LIB}
-        PRIVATE
-        ST25R_COM_SINGLETXRX
-)
+if(CONFIG_STSW_ST25RFAL002_TRANSPORT_SPI)
+    target_compile_definitions(
+            ${COMPONENT_LIB}
+            PRIVATE
+            ST25R_COM_SINGLETXRX
+    )
+endif()
 
 # 官方代码保持使用 ISO C99 编译。
 set_source_files_properties(
