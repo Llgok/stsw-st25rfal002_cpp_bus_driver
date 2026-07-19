@@ -20,19 +20,25 @@ std::atomic<RfalPlatformContext*> RfalPlatformContext::active_context_ =
 std::atomic<TaskHandle_t> RfalPlatformContext::interrupt_task_for_isr_ =
     nullptr;
 
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
 RfalPlatformContext::RfalPlatformContext(
     std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus, int32_t interrupt_pin,
     uint16_t address)
-    : bus_(std::move(bus)), interrupt_pin_(interrupt_pin), address_(address) {}
-#else
+    : transport_(Transport::kI2c),
+      tool_(bus),
+      i2c_bus_(std::move(bus)),
+      interrupt_pin_(interrupt_pin),
+      address_(address),
+      chip_select_pin_(-1) {}
+
 RfalPlatformContext::RfalPlatformContext(
     std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus, int32_t interrupt_pin,
     int32_t chip_select_pin)
-    : bus_(std::move(bus)),
+    : transport_(Transport::kSpi),
+      tool_(bus),
+      spi_bus_(std::move(bus)),
       interrupt_pin_(interrupt_pin),
+      address_(0),
       chip_select_pin_(chip_select_pin) {}
-#endif
 
 RfalPlatformContext::~RfalPlatformContext() {
   Deinit(false);
@@ -64,22 +70,20 @@ void RfalPlatformContext::Unbind() {
   bound_ = false;
 }
 
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
 bool RfalPlatformContext::Init(uint32_t frequency_hz) {
-#else
-bool RfalPlatformContext::Init(int32_t frequency_hz) {
-#endif
   ClearError();
   if (bus_initialized_) {
     return true;
   }
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
-  if (bus_ == nullptr || interrupt_pin_ < 0 || address_ > 0x7F ||
-      frequency_hz == 0 || frequency_hz > kMaximumI2cFrequencyHz) {
-#else
-  if (bus_ == nullptr || interrupt_pin_ < 0 || chip_select_pin_ < 0 ||
-      frequency_hz <= 0 || frequency_hz > kMaximumSpiFrequencyHz) {
-#endif
+  const bool valid_i2c =
+      transport_ == Transport::kI2c && i2c_bus_ != nullptr &&
+      address_ <= 0x7F && frequency_hz > 0 &&
+      frequency_hz <= kMaximumI2cFrequencyHz;
+  const bool valid_spi =
+      transport_ == Transport::kSpi && spi_bus_ != nullptr &&
+      chip_select_pin_ >= 0 && frequency_hz > 0 &&
+      frequency_hz <= kMaximumSpiFrequencyHz;
+  if (tool_ == nullptr || interrupt_pin_ < 0 || (!valid_i2c && !valid_spi)) {
     SetError(PlatformError::kInvalidConfiguration,
         "Invalid ST25R3916 platform configuration");
     return false;
@@ -87,23 +91,26 @@ bool RfalPlatformContext::Init(int32_t frequency_hz) {
   if (!bound_ && !Bind()) {
     return false;
   }
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
-  if (!bus_->Init(frequency_hz, address_)) {
+  if (transport_ == Transport::kI2c &&
+      !i2c_bus_->Init(frequency_hz, address_)) {
     SetError(PlatformError::kI2cFailed,
         "Failed to initialize the ST25R3916 I2C device");
     return false;
   }
-#else
-  if (!bus_->Init(frequency_hz, chip_select_pin_)) {
+  if (transport_ == Transport::kSpi &&
+      !spi_bus_->Init(static_cast<int32_t>(frequency_hz), chip_select_pin_)) {
     SetError(PlatformError::kSpiFailed,
         "Failed to initialize the ST25R3916 SPI device");
     return false;
   }
-#endif
   bus_initialized_ = true;
 
   if (!CreateResources()) {
-    bus_->Deinit(false);
+    if (transport_ == Transport::kI2c) {
+      i2c_bus_->Deinit(false);
+    } else {
+      spi_bus_->Deinit(false);
+    }
     bus_initialized_ = false;
     return false;
   }
@@ -116,7 +123,7 @@ bool RfalPlatformContext::Deinit(bool delete_bus) {
   interrupt_task_for_isr_.store(nullptr, std::memory_order_release);
 
   if (interrupt_initialized_) {
-    if (!bus_->DeinitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_))) {
+    if (!tool_->DeinitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_))) {
       SetError(PlatformError::kInterruptFailed,
           "Failed to deinitialize the ST25R3916 interrupt");
       result = false;
@@ -128,27 +135,31 @@ bool RfalPlatformContext::Deinit(bool delete_bus) {
   DestroyResources();
 
   if (bus_initialized_) {
-    if (!bus_->Deinit(delete_bus)) {
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
-      SetError(PlatformError::kI2cFailed,
-          "Failed to deinitialize the ST25R3916 I2C device");
-#else
-      SetError(PlatformError::kSpiFailed,
-          "Failed to deinitialize the ST25R3916 SPI device");
-#endif
+    const bool deinitialized = transport_ == Transport::kI2c
+                                   ? i2c_bus_->Deinit(delete_bus)
+                                   : spi_bus_->Deinit(delete_bus);
+    if (!deinitialized) {
+      if (transport_ == Transport::kI2c) {
+        SetError(PlatformError::kI2cFailed,
+            "Failed to deinitialize the ST25R3916 I2C device");
+      } else {
+        SetError(PlatformError::kSpiFailed,
+            "Failed to deinitialize the ST25R3916 SPI device");
+      }
       result = false;
     }
     bus_initialized_ = false;
   }
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
   i2c_started_ = false;
   i2c_repeat_started_ = false;
   i2c_address_valid_ = false;
   i2c_transmit_length_ = 0;
-#else
   spi_selected_ = false;
-#endif
   return result;
+}
+
+RfalPlatformContext::Transport RfalPlatformContext::transport() const {
+  return transport_;
 }
 
 PlatformError RfalPlatformContext::error() const { return error_.load(); }
@@ -192,8 +203,8 @@ void RfalPlatformContext::UnprotectWorker() {
 }
 
 void RfalPlatformContext::InitializeInterruptPin() {
-  if (bus_ == nullptr ||
-      !bus_->SetGpioMode(interrupt_pin_, cpp_bus_driver::Tool::GpioMode::kInput,
+  if (tool_ == nullptr ||
+      !tool_->SetGpioMode(interrupt_pin_, cpp_bus_driver::Tool::GpioMode::kInput,
           cpp_bus_driver::Tool::GpioStatus::kPulldown)) {
     SetError(PlatformError::kGpioFailed,
         "Failed to configure the ST25R3916 interrupt GPIO");
@@ -203,11 +214,11 @@ void RfalPlatformContext::InitializeInterruptPin() {
 void RfalPlatformContext::SetInterruptCallback(
     RfalPlatformInterruptCallback callback) {
   interrupt_callback_.store(callback);
-  if (callback == nullptr || interrupt_initialized_ || bus_ == nullptr) {
+  if (callback == nullptr || interrupt_initialized_ || tool_ == nullptr) {
     return;
   }
 
-  if (!bus_->InitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_),
+  if (!tool_->InitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_),
           cpp_bus_driver::Tool::InterruptMode::kRising, InterruptHandler,
           nullptr)) {
     SetError(PlatformError::kInterruptFailed,
@@ -223,10 +234,9 @@ void RfalPlatformContext::SetInterruptCallback(
 }
 
 bool RfalPlatformContext::InterruptPinIsHigh() const {
-  return bus_ != nullptr && bus_->GpioRead(interrupt_pin_);
+  return tool_ != nullptr && tool_->GpioRead(interrupt_pin_);
 }
 
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
 void RfalPlatformContext::I2cStart() {
   i2c_started_ = true;
   i2c_repeat_started_ = false;
@@ -252,7 +262,11 @@ void RfalPlatformContext::I2cRepeatStart() {
 }
 
 void RfalPlatformContext::I2cSlaveAddressWrite(uint8_t address) {
-  i2c_address_valid_ = i2c_started_ && address == address_;
+  // cpp_bus_driver binds the target address when the I2C device is initialized.
+  // The upstream address is informational; use the constructor address so
+  // hardware with a non-default strapped address is also supported.
+  static_cast<void>(address);
+  i2c_address_valid_ = i2c_started_;
   if (!i2c_address_valid_) {
     SetError(PlatformError::kInvalidConfiguration,
         "Invalid ST25R3916 I2C write address");
@@ -260,8 +274,8 @@ void RfalPlatformContext::I2cSlaveAddressWrite(uint8_t address) {
 }
 
 void RfalPlatformContext::I2cSlaveAddressRead(uint8_t address) {
-  i2c_address_valid_ =
-      i2c_started_ && i2c_repeat_started_ && address == address_;
+  static_cast<void>(address);
+  i2c_address_valid_ = i2c_started_ && i2c_repeat_started_;
   if (!i2c_address_valid_) {
     SetError(PlatformError::kInvalidConfiguration,
         "Invalid ST25R3916 I2C read address");
@@ -273,7 +287,7 @@ void RfalPlatformContext::I2cTransmit(
   if (length == 0) {
     return;
   }
-  if (!bus_initialized_ || bus_ == nullptr || buffer == nullptr ||
+  if (!bus_initialized_ || i2c_bus_ == nullptr || buffer == nullptr ||
       !i2c_started_ || !i2c_address_valid_ || i2c_repeat_started_ ||
       i2c_transmit_length_ + length > i2c_transmit_buffer_.size()) {
     SetError(PlatformError::kInvalidConfiguration,
@@ -285,7 +299,7 @@ void RfalPlatformContext::I2cTransmit(
       i2c_transmit_buffer_.data() + i2c_transmit_length_, buffer, length);
   i2c_transmit_length_ += length;
   if (last && transmit_only &&
-      !bus_->Write(i2c_transmit_buffer_.data(), i2c_transmit_length_)) {
+      !i2c_bus_->Write(i2c_transmit_buffer_.data(), i2c_transmit_length_)) {
     SetError(PlatformError::kI2cFailed, "ST25R3916 I2C write failed");
   }
 }
@@ -294,7 +308,7 @@ void RfalPlatformContext::I2cReceive(uint8_t* buffer, uint16_t length) {
   if (length == 0) {
     return;
   }
-  if (!bus_initialized_ || bus_ == nullptr || buffer == nullptr ||
+  if (!bus_initialized_ || i2c_bus_ == nullptr || buffer == nullptr ||
       !i2c_started_ || !i2c_repeat_started_ || !i2c_address_valid_) {
     SetError(PlatformError::kInvalidConfiguration,
         "Invalid ST25R3916 I2C receive transaction");
@@ -302,14 +316,14 @@ void RfalPlatformContext::I2cReceive(uint8_t* buffer, uint16_t length) {
   }
 
   const bool result = i2c_transmit_length_ == 0
-                          ? bus_->Read(buffer, length)
-                          : bus_->WriteRead(i2c_transmit_buffer_.data(),
+                          ? i2c_bus_->Read(buffer, length)
+                          : i2c_bus_->WriteRead(i2c_transmit_buffer_.data(),
                                 i2c_transmit_length_, buffer, length);
   if (!result) {
     SetError(PlatformError::kI2cFailed, "ST25R3916 I2C read failed");
   }
 }
-#else
+
 void RfalPlatformContext::SpiSelect() { spi_selected_ = true; }
 
 void RfalPlatformContext::SpiDeselect() { spi_selected_ = false; }
@@ -319,7 +333,7 @@ void RfalPlatformContext::SpiTransceive(
   if (length == 0) {
     return;
   }
-  if (!bus_initialized_ || bus_ == nullptr || transmit_buffer == nullptr ||
+  if (!bus_initialized_ || spi_bus_ == nullptr || transmit_buffer == nullptr ||
       !spi_selected_) {
     SetError(PlatformError::kInvalidConfiguration,
         "Invalid ST25R3916 SPI transaction");
@@ -328,7 +342,7 @@ void RfalPlatformContext::SpiTransceive(
 
   bool result = false;
   if (receive_buffer == nullptr) {
-    result = bus_->Write(transmit_buffer, length);
+    result = spi_bus_->Write(transmit_buffer, length);
   } else if (receive_buffer == transmit_buffer) {
     if (length > spi_receive_buffer_.size()) {
       SetError(PlatformError::kInvalidConfiguration,
@@ -336,47 +350,46 @@ void RfalPlatformContext::SpiTransceive(
       return;
     }
     result =
-        bus_->WriteRead(transmit_buffer, spi_receive_buffer_.data(), length);
+        spi_bus_->WriteRead(transmit_buffer, spi_receive_buffer_.data(), length);
     if (result) {
       std::memcpy(receive_buffer, spi_receive_buffer_.data(), length);
     }
   } else {
-    result = bus_->WriteRead(transmit_buffer, receive_buffer, length);
+    result = spi_bus_->WriteRead(transmit_buffer, receive_buffer, length);
   }
   if (!result) {
     SetError(PlatformError::kSpiFailed, "ST25R3916 SPI transaction failed");
   }
 }
-#endif
 
 uint32_t RfalPlatformContext::GetSystemTick() const {
-  if (bus_ == nullptr) {
+  if (tool_ == nullptr) {
     return 0;
   }
-  return static_cast<uint32_t>(bus_->GetSystemTimeMs());
+  return static_cast<uint32_t>(tool_->GetSystemTimeMs());
 }
 
 void RfalPlatformContext::Delay(uint32_t delay_ms) const {
-  if (bus_ != nullptr) {
-    bus_->DelayMs(delay_ms);
+  if (tool_ != nullptr) {
+    tool_->DelayMs(delay_ms);
   }
 }
 
 void RfalPlatformContext::LogV(const char* format, va_list arguments) const {
-  if (bus_ == nullptr || format == nullptr) {
+  if (tool_ == nullptr || format == nullptr) {
     return;
   }
 
   std::array<char, 512> message = {};
   std::vsnprintf(message.data(), message.size(), format, arguments);
-  bus_->LogMessage(cpp_bus_driver::Tool::LogLevel::kInfo, __FILE__, __LINE__,
+  tool_->LogMessage(cpp_bus_driver::Tool::LogLevel::kInfo, __FILE__, __LINE__,
       "%s", message.data());
 }
 
 void RfalPlatformContext::SetError(PlatformError error, const char* message) {
   error_.store(error);
-  if (bus_ != nullptr && message != nullptr) {
-    bus_->LogMessage(cpp_bus_driver::Tool::LogLevel::kError, __FILE__, __LINE__,
+  if (tool_ != nullptr && message != nullptr) {
+    tool_->LogMessage(cpp_bus_driver::Tool::LogLevel::kError, __FILE__, __LINE__,
         "%s\n", message);
   }
 }
@@ -553,7 +566,12 @@ extern "C" bool rfalPlatformGpioIsHigh(void) {
   return platform != nullptr && platform->InterruptPinIsHigh();
 }
 
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+extern "C" bool rfalPlatformUsesI2c(void) {
+  auto* platform = ActivePlatform();
+  return platform != nullptr &&
+         platform->transport() == RfalPlatformContext::Transport::kI2c;
+}
+
 extern "C" void rfalPlatformI2cStart(void) {
   if (auto* platform = ActivePlatform(); platform != nullptr) {
     platform->I2cStart();
@@ -596,7 +614,7 @@ extern "C" void rfalPlatformI2cReceive(uint8_t* buffer, uint16_t length) {
     platform->I2cReceive(buffer, length);
   }
 }
-#else
+
 extern "C" void rfalPlatformSpiSelect(void) {
   if (auto* platform = ActivePlatform(); platform != nullptr) {
     platform->SpiSelect();
@@ -615,7 +633,6 @@ extern "C" void rfalPlatformSpiTransceive(
     platform->SpiTransceive(transmit_buffer, receive_buffer, length);
   }
 }
-#endif
 
 extern "C" uint32_t rfalPlatformGetSystemTick(void) {
   auto* platform = ActivePlatform();

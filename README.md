@@ -9,7 +9,7 @@
 `stsw-st25rfal002_cpp_bus_driver` is an ESP-IDF bridge between ST's official
 STSW-ST25RFAL002 RF/NFC Abstraction Layer and
 [`cpp_bus_driver`](https://github.com/Llgok/cpp_bus_driver).
-It manages SPI resources, synchronization, interrupt processing, and the RFAL
+It manages I2C/SPI resources, synchronization, interrupt processing, and the RFAL
 lifecycle with C++ objects while preserving the official RFAL APIs.
 
 ## Table of Contents
@@ -23,14 +23,15 @@ lifecycle with C++ objects while preserving the official RFAL APIs.
 
 - Builds the official ST25R3916 RFAL and NFC-A/B/F/V, ST25TB, ISO-DEP,
   NFC-DEP, T1T, T2T, T4T, collision-detection, and antenna-tuning modules.
-- Uses `cpp_bus_driver` for SPI, GPIO, delay, and logging services.
+- Uses `cpp_bus_driver` for I2C, SPI, GPIO, delay, and logging services.
 - Combines each official command into one full-duplex SPI transaction with one
   complete hardware-controlled chip-select pulse.
 - Defers the active-high INT signal to a dedicated FreeRTOS task before
   executing official RFAL SPI operations.
 - Protects communication, RFAL Worker execution, and interrupt status in a
   multi-task environment.
-- Selects ST25R3916 or ST25R3916B through Kconfig.
+- Selects I2C or SPI from the supplied bus object and detects ST25R3916 or
+  ST25R3916B through `IC_IDENTITY` at runtime.
 - Exposes the official public C APIs through one C-linkage aggregate header.
 
 The public headers, build configuration, and bundled official RFAL sources are
@@ -42,8 +43,9 @@ the source of truth for the currently supported functionality.
 | --- | --- | --- |
 | ESP-IDF 5.5.3 or later | Supported | Uses `cpp_bus_driver` for low-level hardware access |
 
-The current port supports SPI mode 1 with MSB-first transfers. The default SPI
-clock is 5 MHz, and the maximum accepted clock is 10 MHz.
+The current port supports I2C and SPI. I2C defaults to 400 kHz and accepts up
+to 1 MHz. SPI uses mode 1 with MSB-first transfers, defaults to 5 MHz, and
+accepts up to 10 MHz.
 
 ## Quick Start
 
@@ -91,10 +93,11 @@ git submodule update --init --recursive
 Submodule directories may be customized to match the project layout, as long
 as ESP-IDF can discover both components.
 
-### Select the ST25R Chip
+### Automatic ST25R Chip Detection
 
-The component selects ST25R3916 by default. Select ST25R3916B under
-`STSW-ST25RFAL002 Configuration` in menuconfig when required by the hardware.
+No Kconfig or constructor chip selection is required. `Init()` reads
+`IC_IDENTITY` and loads the matching ST25R3916 or ST25R3916B initialization,
+analog-configuration, and DPO data.
 
 ### Create the SPI Bus
 
@@ -126,6 +129,18 @@ if (nfc.Init() != RFAL_ERR_NONE) {
   return;
 }
 ```
+
+I2C uses the other constructor of the same class. Supply the I2C bus, interrupt
+pin, and device address; no transport macro is required:
+
+```cpp
+std::shared_ptr<cpp_bus_driver::BusI2cGuide> i2c_bus = /* board I2C bus */;
+stsw_st25rfal002_cpp_bus_driver::St25r3916 nfc(
+    i2c_bus, interrupt_pin, 0x50);
+```
+
+After `Init()` succeeds, use `chip_identity()`, `chip_revision()`, and
+`is_st25r3916b()` to inspect the detected chip.
 
 ### Use the Official NFC API
 
@@ -159,8 +174,8 @@ while (true) {
 
 - Call `NfcWorker()` frequently while using the high-level discovery API.
 - Call `Worker()` only when directly managing the low-level RFAL API.
-- `Deinit(false)` releases only the SPI device used by the current object.
-- `Deinit(true)` also requests deletion of the underlying SPI bus; use it only
+- `Deinit(false)` releases only the I2C/SPI device used by the current object.
+- `Deinit(true)` also requests deletion of the underlying bus; use it only
   when the current object exclusively owns that bus.
 - The official stack uses global internal state. Only one `St25r3916` object
   may be initialized at a time.
@@ -169,18 +184,19 @@ while (true) {
 - The interrupt worker uses the highest available system priority. Tasks that
   call RFAL must not keep scheduling disabled or continuously busy-loop at the
   highest priority.
-- Worker loops must stop advancing the state machine after an SPI or platform
+- Worker loops must stop advancing the state machine after a transport or platform
   failure.
 
 ## Notes
 
 - SPI mode requires `I2C_EN` to be held low and `VDD_IO` to be compatible with
   the host controller's logic level.
-- The official compile-time I2C path is not enabled by this port.
 - Files below `third_party/STSW-ST25RFAL002` are unchanged official ST sources
   and must not be modified by the port.
 - Platform adaptations belong in `src/platform`; C++ lifecycle and convenience
   interfaces belong in `src/st25r3916`.
+- `src/vendor_port` contains the runtime transport and chip adaptations selected
+  by CMake instead of the corresponding upstream translation units.
 
 Refer to the public headers, the bundled RFAL documentation, and the official
 ST25R3916/ST25R3916B documentation for detailed APIs and hardware requirements.

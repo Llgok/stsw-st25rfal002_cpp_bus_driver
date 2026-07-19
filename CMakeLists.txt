@@ -8,7 +8,7 @@ set(
         "${rfal_source_dir}/rfal_cd.c"
         "${rfal_source_dir}/rfal_crc.c"
         "${rfal_source_dir}/rfal_dlma.c"
-        "${rfal_source_dir}/rfal_dpo.c"
+        "src/vendor_port/rfal_dpo_runtime.c"
         "${rfal_source_dir}/rfal_iso15693_2.c"
         "${rfal_source_dir}/rfal_isoDep.c"
         "${rfal_source_dir}/rfal_nfc.c"
@@ -26,10 +26,15 @@ set(
 
 set(
         st25r3916_sources
-        "${st25r3916_source_dir}/rfal_rfst25r3916.c"
-        "${st25r3916_source_dir}/st25r3916.c"
+        "src/vendor_port/rfal_rfst25r3916_runtime.c"
+        "src/vendor_port/st25r3916_runtime_driver.c"
+        "src/vendor_port/st25r3916_com_runtime.c"
+        "src/vendor_port/st25r3916_runtime.c"
+        "src/vendor_port/st25r3916_analog_config.c"
+        "src/vendor_port/st25r3916b_analog_config.c"
+        "src/vendor_port/st25r3916_dpo_config.c"
+        "src/vendor_port/st25r3916b_dpo_config.c"
         "${st25r3916_source_dir}/st25r3916_aat.c"
-        "${st25r3916_source_dir}/st25r3916_com.c"
         "${st25r3916_source_dir}/st25r3916_irq.c"
         "${st25r3916_source_dir}/st25r3916_led.c"
 )
@@ -54,17 +59,17 @@ idf_component_register(
         "freertos"
 )
 
-# ST 通信层将每条命令和响应合并为一次全双工传输，cpp_bus_driver 可以在
-# 不修改官方源码的前提下管理完整事务的片选信号。
-if(CONFIG_STSW_ST25RFAL002_TRANSPORT_SPI)
-    target_compile_definitions(
-            ${COMPONENT_LIB}
-            PRIVATE
-            ST25R_COM_SINGLETXRX
-    )
-endif()
+# 仅为未改动的官方头文件提供内部基础定义；实际芯片相关行为、模拟配置和
+# DPO 表都由本地移植层在读取 IC_IDENTITY 后按运行时型号选择。
+target_compile_definitions(
+        ${COMPONENT_LIB}
+        PRIVATE
+        ST25R3916
+        RFAL_FEATURE_DYNAMIC_ANALOG_CONFIG=1
+        RFAL_ANALOG_CONFIG_TBL_SIZE=2048U
+)
 
-# 官方代码保持使用 ISO C99 编译。
+# 官方代码和本地 RFAL 移植文件保持使用 ISO C 编译。
 set_source_files_properties(
         ${rfal_sources}
         ${st25r3916_sources}

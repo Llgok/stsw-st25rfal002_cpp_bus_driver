@@ -36,13 +36,15 @@ namespace stsw_st25rfal002_cpp_bus_driver {
  */
 class RfalPlatformContext final {
  public:
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+  enum class Transport {
+    kI2c,
+    kSpi,
+  };
+
   RfalPlatformContext(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
       int32_t interrupt_pin, uint16_t address);
-#else
   RfalPlatformContext(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
       int32_t interrupt_pin, int32_t chip_select_pin);
-#endif
 
   ~RfalPlatformContext();
 
@@ -62,19 +64,15 @@ class RfalPlatformContext final {
   void Unbind();
 
   /**
-   * @brief 初始化 SPI 设备、同步资源和中断任务
-   * @param frequency_hz SPI 时钟频率，单位为 Hz
+   * @brief 初始化构造函数选定的总线设备、同步资源和中断任务
+   * @param frequency_hz I2C 或 SPI 总线频率，单位为 Hz
    * @return 所有平台资源初始化成功时返回 true
    */
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
   bool Init(uint32_t frequency_hz);
-#else
-  bool Init(int32_t frequency_hz);
-#endif
 
   /**
-   * @brief 释放中断、同步资源和 SPI 设备
-   * @param delete_bus 是否同时请求释放底层共享 SPI 总线
+   * @brief 释放中断、同步资源和 I2C/SPI 设备
+   * @param delete_bus 是否同时请求释放底层共享总线
    * @return 请求的资源全部释放成功时返回 true
    */
   bool Deinit(bool delete_bus);
@@ -143,7 +141,8 @@ class RfalPlatformContext final {
    */
   bool InterruptPinIsHigh() const;
 
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
+  Transport transport() const;
+
   void I2cStart();
   void I2cStop();
   void I2cRepeatStart();
@@ -152,7 +151,6 @@ class RfalPlatformContext final {
   void I2cTransmit(
       const uint8_t* buffer, uint16_t length, bool last, bool transmit_only);
   void I2cReceive(uint8_t* buffer, uint16_t length);
-#else
   /**
    * @brief 标记一次 ST25R3916 SPI 事务开始
    */
@@ -171,7 +169,6 @@ class RfalPlatformContext final {
    */
   void SpiTransceive(
       const uint8_t* transmit_buffer, uint8_t* receive_buffer, uint16_t length);
-#endif
 
   /**
    * @brief 获取毫秒系统时钟
@@ -206,11 +203,8 @@ class RfalPlatformContext final {
   static RfalPlatformContext* active();
 
  private:
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
   static constexpr uint32_t kMaximumI2cFrequencyHz = 1000000;
-#else
-  static constexpr int32_t kMaximumSpiFrequencyHz = 10000000;
-#endif
+  static constexpr uint32_t kMaximumSpiFrequencyHz = 10000000;
   static constexpr uint32_t kInterruptTaskStackSize = 4096;
   static constexpr UBaseType_t kInterruptTaskPriority =
       configMAX_PRIORITIES - 1;
@@ -252,26 +246,19 @@ class RfalPlatformContext final {
   static std::atomic<RfalPlatformContext*> active_context_;
   static std::atomic<TaskHandle_t> interrupt_task_for_isr_;
 
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
-  std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus_;
-#else
-  std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus_;
-#endif
+  Transport transport_;
+  std::shared_ptr<cpp_bus_driver::Tool> tool_;
+  std::shared_ptr<cpp_bus_driver::BusI2cGuide> i2c_bus_;
+  std::shared_ptr<cpp_bus_driver::BusSpiGuide> spi_bus_;
   int32_t interrupt_pin_;
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
   uint16_t address_;
-#else
   int32_t chip_select_pin_;
-#endif
   std::atomic<PlatformError> error_{PlatformError::kNone};
   std::atomic<RfalPlatformInterruptCallback> interrupt_callback_{nullptr};
   std::atomic<bool> stopping_{false};
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
   std::array<uint8_t, ST25R3916_FIFO_DEPTH + 1U> i2c_transmit_buffer_ = {};
   uint16_t i2c_transmit_length_ = 0;
-#else
   std::array<uint8_t, ST25R3916_FIFO_DEPTH + 1U> spi_receive_buffer_ = {};
-#endif
   SemaphoreHandle_t communication_mutex_ = nullptr;
   SemaphoreHandle_t worker_mutex_ = nullptr;
   SemaphoreHandle_t task_stopped_ = nullptr;
@@ -279,13 +266,10 @@ class RfalPlatformContext final {
   portMUX_TYPE irq_status_lock_ = portMUX_INITIALIZER_UNLOCKED;
   bool bus_initialized_ = false;
   bool interrupt_initialized_ = false;
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
   bool i2c_started_ = false;
   bool i2c_repeat_started_ = false;
   bool i2c_address_valid_ = false;
-#else
   bool spi_selected_ = false;
-#endif
   bool bound_ = false;
 };
 

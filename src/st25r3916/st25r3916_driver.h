@@ -12,7 +12,6 @@
 
 #include "bus/bus_guide.h"
 #include "platform/rfal_platform_status.h"
-#include "sdkconfig.h"
 
 extern "C" {
 #include "rfal_nfc.h"
@@ -24,27 +23,24 @@ namespace stsw_st25rfal002_cpp_bus_driver {
 class RfalPlatformContext;
 
 /**
- * @brief 将 SPI 接口的 ST25R3916 接入 ST 官方 RFAL 协议栈
+ * @brief 将 I2C 或 SPI 接口的 ST25R3916/3916B 接入 ST 官方 RFAL 协议栈
  *
- * 传入的 SPI 对象必须使用 Mode 1 和 MSB first。STSW-ST25RFAL002 使用
- * 全局协议状态，因此同一时间最多只能初始化一个 St25r3916 对象。
+ * 总线类型由构造函数参数自动确定；SPI 对象必须使用 Mode 1 和 MSB first。
+ * Init() 会读取 IC_IDENTITY 自动识别芯片。STSW-ST25RFAL002 使用全局协议
+ * 状态，因此同一时间最多只能初始化一个 St25r3916 对象。
  */
 class St25r3916 final {
  public:
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
   static constexpr uint32_t kDefaultI2cFrequencyHz = 400000;
   static constexpr uint32_t kMaximumI2cFrequencyHz = 1000000;
   static constexpr uint16_t kDefaultI2cAddress = 0x50;
+  static constexpr uint32_t kDefaultSpiFrequencyHz = 5000000;
+  static constexpr uint32_t kMaximumSpiFrequencyHz = 10000000;
 
   St25r3916(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
       int32_t interrupt_pin, uint16_t address = kDefaultI2cAddress);
-#else
-  static constexpr int32_t kDefaultSpiFrequencyHz = 5000000;
-  static constexpr int32_t kMaximumSpiFrequencyHz = 10000000;
-
   St25r3916(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
       int32_t interrupt_pin, int32_t chip_select_pin);
-#endif
 
   ~St25r3916();
 
@@ -55,19 +51,16 @@ class St25r3916 final {
   St25r3916& operator=(St25r3916&&) = delete;
 
   /**
-   * @brief 初始化 SPI、延迟中断任务和完整 NFC RFAL 状态机
-   * @param frequency_hz SPI 时钟频率，单位为 Hz，默认 5 MHz，最大 10 MHz
+   * @brief 初始化所选总线、延迟中断任务和完整 NFC RFAL 状态机
+   * @param frequency_hz 总线频率，单位为 Hz；I2C 最大 1 MHz，SPI 最大 10 MHz
    * @return 官方 RFAL 返回码
    */
-#if defined(CONFIG_STSW_ST25RFAL002_TRANSPORT_I2C)
-  ReturnCode Init(uint32_t frequency_hz = kDefaultI2cFrequencyHz);
-#else
-  ReturnCode Init(int32_t frequency_hz = kDefaultSpiFrequencyHz);
-#endif
+  ReturnCode Init();
+  ReturnCode Init(uint32_t frequency_hz);
 
   /**
    * @brief 反初始化 RFAL 并释放硬件资源
-   * @param delete_bus 是否同时请求释放底层共享 SPI 总线
+   * @param delete_bus 是否同时请求释放底层共享 I2C/SPI 总线
    * @return 首个官方 RFAL 或平台资源释放错误
    */
   ReturnCode Deinit(bool delete_bus = false);
@@ -77,6 +70,13 @@ class St25r3916 final {
    * @return Init() 成功后至 Deinit() 完成前返回 true
    */
   bool initialized() const;
+
+  /** @return 当前保存的完整 IC_IDENTITY 寄存器值，未初始化时为 0 */
+  uint8_t chip_identity() const;
+  /** @return IC_IDENTITY 中的芯片修订版本字段 */
+  uint8_t chip_revision() const;
+  /** @return 当前识别到的芯片是否为 ST25R3916B */
+  bool is_st25r3916b() const;
 
   /**
    * @brief 获取官方 RFAL 返回码以下的平台错误

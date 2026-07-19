@@ -9,7 +9,7 @@
 `stsw-st25rfal002_cpp_bus_driver` 是 ST 官方 STSW-ST25RFAL002 RF/NFC
 抽象层与
 [`cpp_bus_driver`](https://github.com/Llgok/cpp_bus_driver)
-之间的 ESP-IDF 桥接组件。它使用 C++ 对象管理 SPI 资源、同步、中断处理和
+之间的 ESP-IDF 桥接组件。它使用 C++ 对象管理 I2C/SPI 资源、同步、中断处理和
 RFAL 生命周期，同时保留官方 RFAL API。
 
 ## 目录
@@ -23,11 +23,12 @@ RFAL 生命周期，同时保留官方 RFAL API。
 
 - 编译官方 ST25R3916 RFAL，以及 NFC-A/B/F/V、ST25TB、ISO-DEP、NFC-DEP、
   T1T、T2T、T4T、碰撞检测和天线调谐模块。
-- 使用 `cpp_bus_driver` 提供 SPI、GPIO、延时和日志服务。
+- 使用 `cpp_bus_driver` 提供 I2C、SPI、GPIO、延时和日志服务。
 - 将每条官方命令合并为一次全双工 SPI 事务，由硬件产生一个完整的片选脉冲。
 - 将高电平有效的 INT 信号延迟到专用 FreeRTOS 任务，再执行官方 RFAL SPI 操作。
 - 为通信、RFAL Worker 和中断状态提供多任务并发保护。
-- 通过 Kconfig 选择 ST25R3916 或 ST25R3916B。
+- 由传入的总线对象自动选择 I2C 或 SPI，并通过 `IC_IDENTITY` 自动识别
+  ST25R3916 或 ST25R3916B。
 - 通过一个使用 C 语言链接的聚合头文件公开官方公共 API。
 
 公开头文件、构建配置和随库提供的官方 RFAL 源码，是当前支持功能的准确信息来源。
@@ -38,8 +39,8 @@ RFAL 生命周期，同时保留官方 RFAL API。
 | --- | --- | --- |
 | ESP-IDF 5.5.3 及以上 | 支持 | 使用 `cpp_bus_driver` 访问底层硬件 |
 
-当前移植支持 SPI Mode 1 和 MSB first。默认 SPI 频率为 5 MHz，允许的最大频率
-为 10 MHz。
+当前移植支持 I2C 和 SPI。I2C 默认频率为 400 kHz、最大为 1 MHz；SPI 要求
+Mode 1 和 MSB first，默认频率为 5 MHz、最大为 10 MHz。
 
 ## 快速开始
 
@@ -84,10 +85,10 @@ git submodule update --init --recursive
 
 子模块目录可以根据工程布局调整，但必须确保 ESP-IDF 能发现这两个组件。
 
-### 选择 ST25R 芯片
+### 自动识别 ST25R 芯片
 
-组件默认选择 ST25R3916。硬件使用 ST25R3916B 时，在 menuconfig 的
-`STSW-ST25RFAL002 Configuration` 中切换芯片型号。
+无需通过 Kconfig 或构造函数选择芯片型号。`Init()` 会先读取 `IC_IDENTITY`，
+然后自动加载 ST25R3916 或 ST25R3916B 对应的初始化、模拟配置和 DPO 参数。
 
 ### 创建 SPI 总线
 
@@ -118,6 +119,18 @@ if (nfc.Init() != RFAL_ERR_NONE) {
   return;
 }
 ```
+
+I2C 使用同一个类的另一个构造函数；传入 I2C 总线、中断引脚和设备地址即可，
+无需设置任何传输宏：
+
+```cpp
+std::shared_ptr<cpp_bus_driver::BusI2cGuide> i2c_bus = /* 板级 I2C 总线 */;
+stsw_st25rfal002_cpp_bus_driver::St25r3916 nfc(
+    i2c_bus, interrupt_pin, 0x50);
+```
+
+`Init()` 成功后可通过 `chip_identity()`、`chip_revision()` 和
+`is_st25r3916b()` 查询自动识别结果。
 
 ### 使用官方 NFC API
 
@@ -150,21 +163,21 @@ while (true) {
 
 - 使用高层发现 API 时，需要频繁调用 `NfcWorker()`。
 - 直接管理底层 RFAL API 时才单独调用 `Worker()`。
-- `Deinit(false)` 只释放当前对象使用的 SPI 设备。
-- `Deinit(true)` 还会请求删除底层 SPI 总线，仅当当前对象独占总线时才能使用。
+- `Deinit(false)` 只释放当前对象使用的 I2C/SPI 设备。
+- `Deinit(true)` 还会请求删除底层总线，仅当当前对象独占总线时才能使用。
 - 官方协议栈使用全局内部状态，因此同一时间只能初始化一个 `St25r3916` 对象。
 - `platform_error()` 用于报告官方 `ReturnCode` 接口以下的总线和平台错误。
 - 中断任务使用系统最高可用优先级。调用 RFAL 的任务不得长期关闭调度器，也不得
   以最高优先级持续忙等。
-- 发生 SPI 或平台错误后，Worker 循环必须停止推进状态机。
+- 发生总线或平台错误后，Worker 循环必须停止推进状态机。
 
 ## 注意事项
 
 - SPI 模式要求 `I2C_EN` 保持低电平，并确保 `VDD_IO` 与主控逻辑电平兼容。
-- 当前移植没有启用官方代码中的编译期 I2C 路径。
 - `third_party/STSW-ST25RFAL002` 保存未经修改的 ST 官方源码，移植层不得修改。
 - 平台适配应放在 `src/platform`；C++ 生命周期和便利接口应放在
   `src/st25r3916`。
+- `src/vendor_port` 保存通过 CMake 替换编译的运行时总线和芯片适配版本。
 
 详细 API 和硬件要求请参考公开头文件、随库提供的 RFAL 文档，以及 ST 官方
 ST25R3916/ST25R3916B 文档。
