@@ -122,7 +122,7 @@ Construct the lifecycle owner with the SPI bus, active-high interrupt pin, and
 chip-select pin:
 
 ```cpp
-stsw_st25rfal002_cpp_bus_driver::St25r3916 nfc(
+stsw_st25rfal002_cpp_bus_driver::St25r3916x nfc(
     spi_bus, interrupt_pin, chip_select_pin);
 
 if (nfc.Init() != RFAL_ERR_NONE) {
@@ -135,7 +135,7 @@ pin, and device address; no transport macro is required:
 
 ```cpp
 std::shared_ptr<cpp_bus_driver::BusI2cGuide> i2c_bus = /* board I2C bus */;
-stsw_st25rfal002_cpp_bus_driver::St25r3916 nfc(
+stsw_st25rfal002_cpp_bus_driver::St25r3916x nfc(
     i2c_bus, interrupt_pin, 0x50);
 ```
 
@@ -177,7 +177,7 @@ while (true) {
 - `Deinit(false)` releases only the I2C/SPI device used by the current object.
 - `Deinit(true)` also requests deletion of the underlying bus; use it only
   when the current object exclusively owns that bus.
-- The official stack uses global internal state. Only one `St25r3916` object
+- The official stack uses global internal state. Only one `St25r3916x` object
   may be initialized at a time.
 - `platform_error()` reports transport and platform failures below the
   official `ReturnCode` interface.
@@ -194,7 +194,7 @@ while (true) {
 - Files below `third_party/STSW-ST25RFAL002` are unchanged official ST sources
   and must not be modified by the port.
 - Platform adaptations belong in `src/platform`; C++ lifecycle and convenience
-  interfaces belong in `src/st25r3916`.
+  interfaces belong in `src/st25r3916x`.
 - `src/vendor_port` contains the runtime transport and chip adaptations selected
   by CMake instead of the corresponding upstream translation units.
 

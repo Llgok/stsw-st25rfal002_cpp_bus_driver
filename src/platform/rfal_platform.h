@@ -23,7 +23,7 @@ extern "C" {
 typedef void (*RfalPlatformInterruptCallback)(void);
 
 // 以下函数是 STSW-ST25RFAL002 官方 C 源码需要的平台钩子。
-// 应用代码不应直接调用，应通过 St25r3916 和官方 RFAL API 使用驱动。
+// 应用代码不应直接调用，应通过 St25r3916x 和官方 RFAL API 使用驱动。
 
 // 通信与并发保护。
 
@@ -182,7 +182,7 @@ void rfalPlatformLog(const char* format, ...);
  * @brief 记录官方 RFAL 断言失败
  *
  * 该函数不会在内部重启或终止任务，而是保存 PlatformError 并输出日志。
- * 上层可通过 St25r3916::platform_error() 查询具体的平台错误。
+ * 上层可通过 St25r3916x::platform_error() 查询具体的平台错误。
  *
  * @param expression 断言表达式
  * @param file 断言所在源文件

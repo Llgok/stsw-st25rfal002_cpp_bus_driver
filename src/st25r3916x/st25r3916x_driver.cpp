@@ -1,11 +1,11 @@
 /*
- * @Description: ST25R3916 官方 RFAL 协议栈 C++ 生命周期实现
+ * @Description: ST25R3916X 官方 RFAL 协议栈 C++ 生命周期实现
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:25:13
  * @LastEditTime: 2026-07-15 09:50:25
  * @License: GPL 3.0
  */
-#include "st25r3916/st25r3916_driver.h"
+#include "st25r3916x/st25r3916x_driver.h"
 
 #include <utility>
 
@@ -14,18 +14,18 @@
 
 namespace stsw_st25rfal002_cpp_bus_driver {
 
-St25r3916::St25r3916(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
+St25r3916x::St25r3916x(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
     int32_t interrupt_pin, uint16_t address)
     : platform_(std::make_unique<RfalPlatformContext>(
           std::move(bus), interrupt_pin, address)) {}
-St25r3916::St25r3916(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
+St25r3916x::St25r3916x(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
     int32_t interrupt_pin, int32_t chip_select_pin)
     : platform_(std::make_unique<RfalPlatformContext>(
           std::move(bus), interrupt_pin, chip_select_pin)) {}
 
-St25r3916::~St25r3916() { Deinit(false); }
+St25r3916x::~St25r3916x() { Deinit(false); }
 
-ReturnCode St25r3916::Init() {
+ReturnCode St25r3916x::Init() {
   if (platform_ == nullptr) {
     return RFAL_ERR_INVALID_HANDLE;
   }
@@ -36,7 +36,7 @@ ReturnCode St25r3916::Init() {
   return Init(frequency_hz);
 }
 
-ReturnCode St25r3916::Init(uint32_t frequency_hz) {
+ReturnCode St25r3916x::Init(uint32_t frequency_hz) {
   if (initialized_) {
     return RFAL_ERR_NONE;
   }
@@ -93,7 +93,7 @@ ReturnCode St25r3916::Init(uint32_t frequency_hz) {
   return RFAL_ERR_NONE;
 }
 
-ReturnCode St25r3916::Deinit(bool delete_bus) {
+ReturnCode St25r3916x::Deinit(bool delete_bus) {
   if (platform_ == nullptr) {
     return RFAL_ERR_INVALID_HANDLE;
   }
@@ -115,32 +115,32 @@ ReturnCode St25r3916::Deinit(bool delete_bus) {
   return result;
 }
 
-bool St25r3916::initialized() const { return initialized_; }
+bool St25r3916x::initialized() const { return initialized_; }
 
-uint8_t St25r3916::chip_identity() const {
+uint8_t St25r3916x::chip_identity() const {
   return st25r3916RuntimeGetIdentity();
 }
 
-uint8_t St25r3916::chip_revision() const {
+uint8_t St25r3916x::chip_revision() const {
   return st25r3916RuntimeGetRevision();
 }
 
-bool St25r3916::is_st25r3916b() const {
+bool St25r3916x::is_st25r3916b() const {
   return st25r3916RuntimeIsSt25r3916B();
 }
 
-PlatformError St25r3916::platform_error() const {
+PlatformError St25r3916x::platform_error() const {
   return platform_ == nullptr ? PlatformError::kInvalidConfiguration
                               : platform_->error();
 }
 
-void St25r3916::Worker() {
+void St25r3916x::Worker() {
   if (initialized_) {
     rfalWorker();
   }
 }
 
-void St25r3916::NfcWorker() {
+void St25r3916x::NfcWorker() {
   if (initialized_) {
     rfalNfcWorker();
   }

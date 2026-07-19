@@ -42,7 +42,7 @@ set(
 idf_component_register(
         SRCS
         "src/platform/rfal_platform.cpp"
-        "src/st25r3916/st25r3916_driver.cpp"
+        "src/st25r3916x/st25r3916x_driver.cpp"
         ${rfal_sources}
         ${st25r3916_sources}
         INCLUDE_DIRS

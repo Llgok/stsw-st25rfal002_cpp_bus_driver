@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "st25r3916/st25r3916_driver.h"
+#include "st25r3916x/st25r3916x_driver.h"
 
 // 官方代码使用 ISO C 编译，C++ 引用聚合头文件时统一使用 C 语言链接。
 extern "C" {

@@ -1,5 +1,5 @@
 /*
- * @Description: ST25R3916 官方 RFAL 协议栈 C++ 生命周期封装
+ * @Description: ST25R3916X 官方 RFAL 协议栈 C++ 生命周期封装
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:23:15
  * @LastEditTime: 2026-07-15 09:50:25
@@ -27,9 +27,9 @@ class RfalPlatformContext;
  *
  * 总线类型由构造函数参数自动确定；SPI 对象必须使用 Mode 1 和 MSB first。
  * Init() 会读取 IC_IDENTITY 自动识别芯片。STSW-ST25RFAL002 使用全局协议
- * 状态，因此同一时间最多只能初始化一个 St25r3916 对象。
+ * 状态，因此同一时间最多只能初始化一个 St25r3916x 对象。
  */
-class St25r3916 final {
+class St25r3916x final {
  public:
   static constexpr uint32_t kDefaultI2cFrequencyHz = 400000;
   static constexpr uint32_t kMaximumI2cFrequencyHz = 1000000;
@@ -37,18 +37,18 @@ class St25r3916 final {
   static constexpr uint32_t kDefaultSpiFrequencyHz = 5000000;
   static constexpr uint32_t kMaximumSpiFrequencyHz = 10000000;
 
-  St25r3916(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
+  St25r3916x(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
       int32_t interrupt_pin, uint16_t address = kDefaultI2cAddress);
-  St25r3916(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
+  St25r3916x(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
       int32_t interrupt_pin, int32_t chip_select_pin);
 
-  ~St25r3916();
+  ~St25r3916x();
 
-  // ST25R3916 对象独占官方协议状态，禁止复制和移动。
-  St25r3916(const St25r3916&) = delete;
-  St25r3916& operator=(const St25r3916&) = delete;
-  St25r3916(St25r3916&&) = delete;
-  St25r3916& operator=(St25r3916&&) = delete;
+  // ST25R3916X 对象独占官方协议状态，禁止复制和移动。
+  St25r3916x(const St25r3916x&) = delete;
+  St25r3916x& operator=(const St25r3916x&) = delete;
+  St25r3916x(St25r3916x&&) = delete;
+  St25r3916x& operator=(St25r3916x&&) = delete;
 
   /**
    * @brief 初始化所选总线、延迟中断任务和完整 NFC RFAL 状态机
@@ -66,7 +66,7 @@ class St25r3916 final {
   ReturnCode Deinit(bool delete_bus = false);
 
   /**
-   * @brief 查询 ST25R3916 是否可以使用
+   * @brief 查询 ST25R3916X 是否可以使用
    * @return Init() 成功后至 Deinit() 完成前返回 true
    */
   bool initialized() const;

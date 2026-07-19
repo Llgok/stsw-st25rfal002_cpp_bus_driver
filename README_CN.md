@@ -112,7 +112,7 @@ auto spi_bus = std::make_shared<cpp_bus_driver::HardwareSpi>(
 使用 SPI 总线、高电平有效的中断引脚和片选引脚创建生命周期对象：
 
 ```cpp
-stsw_st25rfal002_cpp_bus_driver::St25r3916 nfc(
+stsw_st25rfal002_cpp_bus_driver::St25r3916x nfc(
     spi_bus, interrupt_pin, chip_select_pin);
 
 if (nfc.Init() != RFAL_ERR_NONE) {
@@ -125,7 +125,7 @@ I2C 使用同一个类的另一个构造函数；传入 I2C 总线、中断引�
 
 ```cpp
 std::shared_ptr<cpp_bus_driver::BusI2cGuide> i2c_bus = /* 板级 I2C 总线 */;
-stsw_st25rfal002_cpp_bus_driver::St25r3916 nfc(
+stsw_st25rfal002_cpp_bus_driver::St25r3916x nfc(
     i2c_bus, interrupt_pin, 0x50);
 ```
 
@@ -165,7 +165,7 @@ while (true) {
 - 直接管理底层 RFAL API 时才单独调用 `Worker()`。
 - `Deinit(false)` 只释放当前对象使用的 I2C/SPI 设备。
 - `Deinit(true)` 还会请求删除底层总线，仅当当前对象独占总线时才能使用。
-- 官方协议栈使用全局内部状态，因此同一时间只能初始化一个 `St25r3916` 对象。
+- 官方协议栈使用全局内部状态，因此同一时间只能初始化一个 `St25r3916x` 对象。
 - `platform_error()` 用于报告官方 `ReturnCode` 接口以下的总线和平台错误。
 - 中断任务使用系统最高可用优先级。调用 RFAL 的任务不得长期关闭调度器，也不得
   以最高优先级持续忙等。
@@ -176,7 +176,7 @@ while (true) {
 - SPI 模式要求 `I2C_EN` 保持低电平，并确保 `VDD_IO` 与主控逻辑电平兼容。
 - `third_party/STSW-ST25RFAL002` 保存未经修改的 ST 官方源码，移植层不得修改。
 - 平台适配应放在 `src/platform`；C++ 生命周期和便利接口应放在
-  `src/st25r3916`。
+  `src/st25r3916x`。
 - `src/vendor_port` 保存通过 CMake 替换编译的运行时总线和芯片适配版本。
 
 详细 API 和硬件要求请参考公开头文件、随库提供的 RFAL 文档，以及 ST 官方
