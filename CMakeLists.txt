@@ -76,3 +76,11 @@ set_source_files_properties(
         PROPERTIES
         LANGUAGE C
 )
+
+# RFAL T4T 的 Lc 为 uint8_t；当前 APDU 缓冲区配置使官方范围检查恒假。
+# 仅对该第三方源文件关闭类型范围警告，保持 ST 原始代码不变。
+set_source_files_properties(
+        "${rfal_source_dir}/rfal_t4t.c"
+        PROPERTIES
+        COMPILE_OPTIONS "-Wno-type-limits"
+)
