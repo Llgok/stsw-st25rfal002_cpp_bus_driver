@@ -11,6 +11,7 @@ STSW-ST25RFAL002 RF/NFC Abstraction Layer and
 [`cpp_bus_driver`](https://github.com/Llgok/cpp_bus_driver).
 It manages I2C/SPI resources, synchronization, interrupt processing, and the RFAL
 lifecycle with C++ objects while preserving the official RFAL APIs.
+The bundled upstream RFAL version is STSW-ST25RFAL002 v4.2.0.
 
 ## Table of Contents
 

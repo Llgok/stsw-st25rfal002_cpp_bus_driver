@@ -11,6 +11,7 @@
 [`cpp_bus_driver`](https://github.com/Llgok/cpp_bus_driver)
 之间的 ESP-IDF 桥接组件。它使用 C++ 对象管理 I2C/SPI 资源、同步、中断处理和
 RFAL 生命周期，同时保留官方 RFAL API。
+当前随组件提供的上游 RFAL 版本为 STSW-ST25RFAL002 v4.2.0。
 
 ## 目录
 
