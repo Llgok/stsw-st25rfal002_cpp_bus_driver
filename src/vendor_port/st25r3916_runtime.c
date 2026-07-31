@@ -43,6 +43,9 @@ bool st25r3916RuntimeSetIdentity(uint8_t identity) {
 ReturnCode st25r3916RuntimeDetectChip(void) {
   uint8_t identity = 0U;
   st25r3916ReadRegister(ST25R3916_REG_IC_IDENTITY, &identity);
+  if (!rfalPlatformIsHealthy()) {
+    return RFAL_ERR_IO;
+  }
   return st25r3916RuntimeSetIdentity(identity) ? RFAL_ERR_NONE
                                                : RFAL_ERR_HW_MISMATCH;
 }
@@ -64,7 +67,13 @@ uint8_t st25r3916RuntimeGetRevision(void) {
 }
 
 uint8_t st25r3916RuntimeGetSpaceBRegisterCount(void) {
-  return st25r3916RuntimeIsSt25r3916B() ? 24U : 16U;
+  if (st25r3916RuntimeIsSt25r3916()) {
+    return 16U;
+  }
+  if (st25r3916RuntimeIsSt25r3916B()) {
+    return 24U;
+  }
+  return 0U;
 }
 
 ReturnCode st25r3916RuntimeLoadAnalogConfig(void) {

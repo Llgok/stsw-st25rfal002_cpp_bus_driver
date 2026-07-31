@@ -2,7 +2,7 @@
  * @Description: ST25R3916X 官方 RFAL 协议栈 C++ 生命周期封装
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:23:15
- * @LastEditTime: 2026-07-15 09:50:25
+ * @LastEditTime: 2026-07-31 09:03:47
  * @License: GPL 3.0
  */
 #pragma once
@@ -51,7 +51,7 @@ class St25r3916x final {
   St25r3916x& operator=(St25r3916x&&) = delete;
 
   /**
-   * @brief 初始化所选总线、延迟中断任务和完整 NFC RFAL 状态机
+   * @brief 初始化总线、中断任务、NFC RFAL 状态机及默认关闭的 DPO 参数
    * @param frequency_hz 总线频率，单位为 Hz；I2C 最大 1 MHz，SPI 最大 10 MHz
    * @return 官方 RFAL 返回码
    */
@@ -60,8 +60,12 @@ class St25r3916x final {
 
   /**
    * @brief 反初始化 RFAL 并释放硬件资源
+   *
+   * 调用前必须停止其他任务中的 Worker()、NfcWorker() 以及直接 RFAL API
+   * 调用，释放过程不能与协议栈或芯片访问并发执行。
+   *
    * @param delete_bus 是否同时请求释放底层共享 I2C/SPI 总线
-   * @return 首个官方 RFAL 或平台资源释放错误
+   * @return 官方 RFAL、芯片通信或平台资源释放错误
    */
   ReturnCode Deinit(bool delete_bus = false);
 
@@ -85,12 +89,12 @@ class St25r3916x final {
   PlatformError platform_error() const;
 
   /**
-   * @brief 执行一次底层 RFAL Worker
+   * @brief 平台健康时执行一次底层 RFAL Worker
    */
   void Worker();
 
   /**
-   * @brief 执行一次高层 NFC 发现和激活 Worker
+   * @brief 平台健康时执行一次高层 NFC 发现和激活 Worker
    */
   void NfcWorker();
 

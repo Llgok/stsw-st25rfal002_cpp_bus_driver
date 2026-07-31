@@ -1,4 +1,7 @@
 /* Preserve the upstream ST25R3916 analog table under a variant-specific name. */
+#ifdef ST25R3916B
+#undef ST25R3916B
+#endif
 #ifndef ST25R3916
 #define ST25R3916
 #endif

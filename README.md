@@ -3,7 +3,6 @@
 ## **English | [Chinese](./README_CN.md)**
 
 [![Release](https://img.shields.io/github/v/release/Llgok/stsw-st25rfal002_cpp_bus_driver?style=flat-square)](https://github.com/Llgok/stsw-st25rfal002_cpp_bus_driver/releases)
-[![License](https://img.shields.io/github/license/Llgok/stsw-st25rfal002_cpp_bus_driver?style=flat-square)](./LICENSE)
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v5.5.3%2B-ff6f00?style=flat-square)](https://github.com/espressif/esp-idf)
 
 `stsw-st25rfal002_cpp_bus_driver` is an ESP-IDF bridge between ST's official
@@ -33,6 +32,8 @@ The bundled upstream RFAL version is STSW-ST25RFAL002 v4.2.0.
   multi-task environment.
 - Selects I2C or SPI from the supplied bus object and detects ST25R3916 or
   ST25R3916B through `IC_IDENTITY` at runtime.
+- Loads the matching analog configuration and DPO table. DPO is initialized
+  in the disabled state and must be explicitly enabled when required.
 - Exposes the official public C APIs through one C-linkage aggregate header.
 
 The public headers, build configuration, and bundled official RFAL sources are
@@ -98,7 +99,24 @@ as ESP-IDF can discover both components.
 
 No Kconfig or constructor chip selection is required. `Init()` reads
 `IC_IDENTITY` and loads the matching ST25R3916 or ST25R3916B initialization,
-analog-configuration, and DPO data.
+analog-configuration, and DPO data. `rfalDpoInitialize()` is performed by the
+driver, but dynamic power adjustment remains disabled until the application
+calls `rfalDpoSetEnabled(true)`.
+
+Do not define `ST25R3916`, `ST25R3916B`, or disable the dynamic analog/DPO
+features in the application build. These are component-owned compile settings;
+the physical chip is always selected from `IC_IDENTITY` at runtime.
+
+The official `t_st25r3916Regs` type has a compile-time Space-B size. For a
+complete runtime-selected dump, including all 24 ST25R3916B Space-B registers,
+use `st25r3916RuntimeGetRegsDump()`:
+
+```cpp
+st25r3916RuntimeRegs registers = {};
+if (st25r3916RuntimeGetRegsDump(&registers) == RFAL_ERR_NONE) {
+  // registers.RsBCount is 16 for ST25R3916 and 24 for ST25R3916B.
+}
+```
 
 ### Create the SPI Bus
 
@@ -178,6 +196,11 @@ while (true) {
 - `Deinit(false)` releases only the I2C/SPI device used by the current object.
 - `Deinit(true)` also requests deletion of the underlying bus; use it only
   when the current object exclusively owns that bus.
+- Stop every task calling `Worker()`, `NfcWorker()`, or a direct RFAL/chip API
+  before `Deinit()` or object destruction. Cleanup must not run concurrently
+  with protocol-stack or device access.
+- If `Deinit()` reports a platform I/O error, the object keeps the failed
+  resource state so that `Deinit()` can be called again to retry cleanup.
 - The official stack uses global internal state. Only one `St25r3916x` object
   may be initialized at a time.
 - `platform_error()` reports transport and platform failures below the
@@ -185,8 +208,9 @@ while (true) {
 - The interrupt worker uses the highest available system priority. Tasks that
   call RFAL must not keep scheduling disabled or continuously busy-loop at the
   highest priority.
-- Worker loops must stop advancing the state machine after a transport or platform
-  failure.
+- The C++ `Worker()` and `NfcWorker()` helpers stop advancing the state machine
+  after a platform failure. Tasks using direct RFAL/chip APIs must also exit
+  after detecting an error.
 
 ## Notes
 

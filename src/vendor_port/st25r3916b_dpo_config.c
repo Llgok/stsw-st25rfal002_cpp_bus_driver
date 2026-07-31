@@ -1,4 +1,5 @@
 /* Preserve the upstream ST25R3916B DPO table under a variant-specific name. */
+#define ST25R3916_RUNTIME_BUILD_ST25R3916B_TABLE
 #ifdef ST25R3916
 #undef ST25R3916
 #endif

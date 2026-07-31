@@ -2,7 +2,7 @@
  * @Description: STSW-ST25RFAL002 ESP-IDF 平台适配接口
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:38:14
- * @LastEditTime: 2026-07-15 09:50:25
+ * @LastEditTime: 2026-07-31 09:03:47
  * @License: GPL 3.0
  */
 #pragma once
@@ -10,6 +10,43 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+// RFAL 配置必须同时对组件内部源码和包含公开头文件的应用代码可见。
+// 使用 ST25R3916 作为官方公共类型和常量的编译基础；型号相关运行行为仍由
+// IC_IDENTITY 自动选择。只有生成 ST25R3916B 配置表的内部源文件允许定义
+// ST25R3916B，应用和工程构建配置不得再选择编译期芯片型号。
+#if defined(ST25R3916B) && \
+    !defined(ST25R3916_RUNTIME_BUILD_ST25R3916B_TABLE)
+#error \
+    "Do not define ST25R3916B globally; the driver selects ST25R3916/ST25R3916B at runtime"
+#endif
+
+#if !defined(ST25R3916) && !defined(ST25R3916B)
+#define ST25R3916
+#endif
+
+#if defined(RFAL_FEATURE_DYNAMIC_ANALOG_CONFIG) && \
+    !(RFAL_FEATURE_DYNAMIC_ANALOG_CONFIG)
+#error "RFAL_FEATURE_DYNAMIC_ANALOG_CONFIG must be enabled"
+#endif
+#ifndef RFAL_FEATURE_DYNAMIC_ANALOG_CONFIG
+#define RFAL_FEATURE_DYNAMIC_ANALOG_CONFIG true
+#endif
+
+#if defined(RFAL_ANALOG_CONFIG_TBL_SIZE) && \
+    (RFAL_ANALOG_CONFIG_TBL_SIZE < 1024U)
+#error "RFAL_ANALOG_CONFIG_TBL_SIZE must be at least 1024 bytes"
+#endif
+#ifndef RFAL_ANALOG_CONFIG_TBL_SIZE
+#define RFAL_ANALOG_CONFIG_TBL_SIZE 2048U
+#endif
+
+#if defined(RFAL_FEATURE_DPO) && !(RFAL_FEATURE_DPO)
+#error "RFAL_FEATURE_DPO must be enabled"
+#endif
+#ifndef RFAL_FEATURE_DPO
+#define RFAL_FEATURE_DPO true
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -88,9 +125,15 @@ void rfalPlatformInterruptSetCallback(RfalPlatformInterruptCallback callback);
 
 /**
  * @brief 读取高电平有效的 ST25R3916 INT 引脚
- * @return INT 当前为高电平时返回 true
+ * @return 平台健康且 INT 当前为高电平时返回 true
  */
 bool rfalPlatformGpioIsHigh(void);
+
+/**
+ * @brief 查询当前平台上下文是否存在且尚未记录错误
+ * @return 平台可以继续访问芯片时返回 true
+ */
+bool rfalPlatformIsHealthy(void);
 
 bool rfalPlatformUsesI2c(void);
 

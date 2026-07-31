@@ -2,7 +2,7 @@
  * @Description: RFAL 平台接口的 ESP-IDF 内部实现
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:38:14
- * @LastEditTime: 2026-07-15 09:50:25
+ * @LastEditTime: 2026-07-31 09:03:47
  * @License: GPL 3.0
  */
 #pragma once
@@ -137,7 +137,7 @@ class RfalPlatformContext final {
 
   /**
    * @brief 读取 ST25R3916 中断引脚电平
-   * @return 引脚为高电平时返回 true
+   * @return 平台健康且引脚为高电平时返回 true
    */
   bool InterruptPinIsHigh() const;
 
@@ -240,8 +240,9 @@ class RfalPlatformContext final {
 
   /**
    * @brief 通知中断任务退出并等待任务完成
+   * @return 任务正常停止或当前没有中断任务时返回 true
    */
-  void StopInterruptTask();
+  bool StopInterruptTask();
 
   static std::atomic<RfalPlatformContext*> active_context_;
   static std::atomic<TaskHandle_t> interrupt_task_for_isr_;

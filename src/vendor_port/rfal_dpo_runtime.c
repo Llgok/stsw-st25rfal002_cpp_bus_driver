@@ -136,6 +136,20 @@ void rfalDpoInitialize( void )
         gRfalDpo.currentDpo = st25r3916DpoSettings;
         tableLength = st25r3916DpoSettingsLength;
     }
+
+    /* Keep a malformed or unexpectedly enlarged table from overflowing the
+     * fixed upstream DPO workspace. The bundled v4.2.0 tables contain four
+     * complete entries, but this guard also protects future table updates. */
+    if( (tableLength == 0U) ||
+        (tableLength > sizeof(gRfalDpo.table)) ||
+        ((tableLength % sizeof(rfalDpoEntry)) != 0U) )
+    {
+        gRfalDpo.currentDpo = NULL;
+        gRfalDpo.tableEntries = 0U;
+        RFAL_MEMSET( gRfalDpo.table, 0, sizeof(gRfalDpo.table) );
+        return;
+    }
+
     gRfalDpo.tableEntries = (uint8_t)(tableLength / sizeof(rfalDpoEntry));
 
     RFAL_MEMCPY( gRfalDpo.table, gRfalDpo.currentDpo, tableLength );
@@ -188,7 +202,7 @@ ReturnCode rfalDpoTableWrite( const rfalDpoEntry* powerTbl, uint8_t powerTblEntr
     gRfalDpo.currentDpo   = gRfalDpo.table;
     gRfalDpo.tableEntries = powerTblEntries;
     
-    if( gRfalDpo.tableEntry > powerTblEntries )
+    if( gRfalDpo.tableEntry >= powerTblEntries )
     {
         /* powerTblEntries is always greater then zero, verified at parameter check */
         gRfalDpo.tableEntry = (powerTblEntries - 1U); 
@@ -214,7 +228,9 @@ ReturnCode rfalDpoTableRead( rfalDpoEntry* tblBuf, uint8_t tblBufEntries, uint8_
     }
         
     /* Copy the whole Table to the given buffer */
-    RFAL_MEMCPY( tblBuf, gRfalDpo.currentDpo, (tblBufEntries * RFAL_DPO_TABLE_PARAM_LEN) );
+    /* tblBufEntries is the destination capacity. Copy only the active table
+     * entries to avoid reading beyond a smaller default or user table. */
+    RFAL_MEMCPY( tblBuf, gRfalDpo.currentDpo, (gRfalDpo.tableEntries * RFAL_DPO_TABLE_PARAM_LEN) );
     *tableEntries = gRfalDpo.tableEntries;
     
     return RFAL_ERR_NONE;

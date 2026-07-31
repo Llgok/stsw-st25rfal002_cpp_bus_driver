@@ -2,7 +2,7 @@
  * @Description: STSW-ST25RFAL002 桥接组件统一公开头文件
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:23:16
- * @LastEditTime: 2026-07-15 09:50:25
+ * @LastEditTime: 2026-07-30 18:24:23
  * @License: GPL 3.0
  */
 #pragma once
@@ -35,4 +35,5 @@ extern "C" {
 #include "st25r3916_com.h"
 #include "st25r3916_irq.h"
 #include "st25r3916_led.h"
+#include "vendor_port/st25r3916_runtime.h"
 }

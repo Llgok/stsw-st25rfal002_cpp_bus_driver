@@ -59,16 +59,6 @@ idf_component_register(
         "freertos"
 )
 
-# 仅为未改动的官方头文件提供内部基础定义；实际芯片相关行为、模拟配置和
-# DPO 表都由本地移植层在读取 IC_IDENTITY 后按运行时型号选择。
-target_compile_definitions(
-        ${COMPONENT_LIB}
-        PRIVATE
-        ST25R3916
-        RFAL_FEATURE_DYNAMIC_ANALOG_CONFIG=1
-        RFAL_ANALOG_CONFIG_TBL_SIZE=2048U
-)
-
 # 官方代码和本地 RFAL 移植文件保持使用 ISO C 编译。
 set_source_files_properties(
         ${rfal_sources}

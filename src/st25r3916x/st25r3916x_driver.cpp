@@ -2,7 +2,7 @@
  * @Description: ST25R3916X 官方 RFAL 协议栈 C++ 生命周期实现
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:25:13
- * @LastEditTime: 2026-07-15 09:50:25
+ * @LastEditTime: 2026-07-31 09:03:47
  * @License: GPL 3.0
  */
 #include "st25r3916x/st25r3916x_driver.h"
@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "platform/rfal_platform_internal.h"
+#include "rfal_dpo.h"
 #include "vendor_port/st25r3916_runtime.h"
 
 namespace stsw_st25rfal002_cpp_bus_driver {
@@ -71,6 +72,10 @@ ReturnCode St25r3916x::Init(uint32_t frequency_hz) {
   if (rfal_initialization_attempted) {
     result = rfalNfcInitialize();
   }
+  if (result == RFAL_ERR_NONE) {
+    // DPO 默认保持关闭，仅初始化当前芯片对应的默认参数和回调。
+    rfalDpoInitialize();
+  }
   if (result == RFAL_ERR_NONE && !platform_->healthy()) {
     result = RFAL_ERR_IO;
   }
@@ -101,6 +106,9 @@ ReturnCode St25r3916x::Deinit(bool delete_bus) {
   ReturnCode result = RFAL_ERR_NONE;
   if (initialized_) {
     result = rfalDeinitialize();
+    if (result == RFAL_ERR_NONE && !platform_->healthy()) {
+      result = RFAL_ERR_IO;
+    }
     initialized_ = false;
   }
   const bool platform_deinitialized = platform_->Deinit(delete_bus);
@@ -135,13 +143,13 @@ PlatformError St25r3916x::platform_error() const {
 }
 
 void St25r3916x::Worker() {
-  if (initialized_) {
+  if (initialized_ && platform_ != nullptr && platform_->healthy()) {
     rfalWorker();
   }
 }
 
 void St25r3916x::NfcWorker() {
-  if (initialized_) {
+  if (initialized_ && platform_ != nullptr && platform_->healthy()) {
     rfalNfcWorker();
   }
 }

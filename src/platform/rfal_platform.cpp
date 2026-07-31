@@ -2,7 +2,7 @@
  * @Description: STSW-ST25RFAL002 的 ESP-IDF 平台实现
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:40:45
- * @LastEditTime: 2026-07-15 09:50:25
+ * @LastEditTime: 2026-07-31 09:03:47
  * @License: GPL 3.0
  */
 #include <array>
@@ -73,7 +73,10 @@ void RfalPlatformContext::Unbind() {
 bool RfalPlatformContext::Init(uint32_t frequency_hz) {
   ClearError();
   if (bus_initialized_) {
-    return true;
+    SetError(transport_ == Transport::kI2c ? PlatformError::kI2cFailed
+                                           : PlatformError::kSpiFailed,
+        "Previous ST25R3916 platform cleanup is incomplete");
+    return false;
   }
   const bool valid_i2c =
       transport_ == Transport::kI2c && i2c_bus_ != nullptr &&
@@ -106,12 +109,18 @@ bool RfalPlatformContext::Init(uint32_t frequency_hz) {
   bus_initialized_ = true;
 
   if (!CreateResources()) {
-    if (transport_ == Transport::kI2c) {
-      i2c_bus_->Deinit(false);
+    const bool bus_deinitialized = transport_ == Transport::kI2c
+                                       ? i2c_bus_->Deinit(false)
+                                       : spi_bus_->Deinit(false);
+    if (bus_deinitialized) {
+      bus_initialized_ = false;
+    } else if (transport_ == Transport::kI2c) {
+      SetError(PlatformError::kI2cFailed,
+          "Failed to roll back the ST25R3916 I2C device");
     } else {
-      spi_bus_->Deinit(false);
+      SetError(PlatformError::kSpiFailed,
+          "Failed to roll back the ST25R3916 SPI device");
     }
-    bus_initialized_ = false;
     return false;
   }
   return true;
@@ -123,15 +132,21 @@ bool RfalPlatformContext::Deinit(bool delete_bus) {
   interrupt_task_for_isr_.store(nullptr, std::memory_order_release);
 
   if (interrupt_initialized_) {
-    if (!tool_->DeinitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_))) {
+    const bool interrupt_deinitialized =
+        tool_->DeinitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_));
+    // Tool::DeinitGpioInterrupt() 会在单步失败后继续执行其余清理，因此一次
+    // 调用后不再重复移除同一个 ISR；首次失败仍通过返回值报告给上层。
+    interrupt_initialized_ = false;
+    if (!interrupt_deinitialized) {
       SetError(PlatformError::kInterruptFailed,
           "Failed to deinitialize the ST25R3916 interrupt");
       result = false;
     }
-    interrupt_initialized_ = false;
   }
 
-  StopInterruptTask();
+  if (!StopInterruptTask()) {
+    result = false;
+  }
   DestroyResources();
 
   if (bus_initialized_) {
@@ -147,8 +162,9 @@ bool RfalPlatformContext::Deinit(bool delete_bus) {
             "Failed to deinitialize the ST25R3916 SPI device");
       }
       result = false;
+    } else {
+      bus_initialized_ = false;
     }
-    bus_initialized_ = false;
   }
   i2c_started_ = false;
   i2c_repeat_started_ = false;
@@ -234,7 +250,9 @@ void RfalPlatformContext::SetInterruptCallback(
 }
 
 bool RfalPlatformContext::InterruptPinIsHigh() const {
-  return tool_ != nullptr && tool_->GpioRead(interrupt_pin_);
+  // 官方中断处理会在 INT 保持高电平时持续读取中断寄存器。总线或平台已经
+  // 失败时停止继续轮询，避免无法清除 INT 导致最高优先级中断任务持续循环。
+  return healthy() && tool_ != nullptr && tool_->GpioRead(interrupt_pin_);
 }
 
 void RfalPlatformContext::I2cStart() {
@@ -287,6 +305,9 @@ void RfalPlatformContext::I2cTransmit(
   if (length == 0) {
     return;
   }
+  if (!healthy()) {
+    return;
+  }
   if (!bus_initialized_ || i2c_bus_ == nullptr || buffer == nullptr ||
       !i2c_started_ || !i2c_address_valid_ || i2c_repeat_started_ ||
       i2c_transmit_length_ + length > i2c_transmit_buffer_.size()) {
@@ -306,6 +327,9 @@ void RfalPlatformContext::I2cTransmit(
 
 void RfalPlatformContext::I2cReceive(uint8_t* buffer, uint16_t length) {
   if (length == 0) {
+    return;
+  }
+  if (!healthy()) {
     return;
   }
   if (!bus_initialized_ || i2c_bus_ == nullptr || buffer == nullptr ||
@@ -331,6 +355,9 @@ void RfalPlatformContext::SpiDeselect() { spi_selected_ = false; }
 void RfalPlatformContext::SpiTransceive(
     const uint8_t* transmit_buffer, uint8_t* receive_buffer, uint16_t length) {
   if (length == 0) {
+    return;
+  }
+  if (!healthy()) {
     return;
   }
   if (!bus_initialized_ || spi_bus_ == nullptr || transmit_buffer == nullptr ||
@@ -481,11 +508,11 @@ void RfalPlatformContext::DestroyResources() {
   }
 }
 
-void RfalPlatformContext::StopInterruptTask() {
+bool RfalPlatformContext::StopInterruptTask() {
   interrupt_task_for_isr_.store(nullptr, std::memory_order_release);
   TaskHandle_t task = interrupt_task_;
   if (task == nullptr) {
-    return;
+    return true;
   }
 
   stopping_.store(true);
@@ -499,6 +526,7 @@ void RfalPlatformContext::StopInterruptTask() {
   }
   vTaskDelete(task);
   interrupt_task_ = nullptr;
+  return stopped;
 }
 
 }  // namespace stsw_st25rfal002_cpp_bus_driver
@@ -564,6 +592,11 @@ extern "C" void rfalPlatformInterruptSetCallback(
 extern "C" bool rfalPlatformGpioIsHigh(void) {
   auto* platform = ActivePlatform();
   return platform != nullptr && platform->InterruptPinIsHigh();
+}
+
+extern "C" bool rfalPlatformIsHealthy(void) {
+  auto* platform = ActivePlatform();
+  return platform != nullptr && platform->healthy();
 }
 
 extern "C" bool rfalPlatformUsesI2c(void) {

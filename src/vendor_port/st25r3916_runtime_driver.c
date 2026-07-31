@@ -764,6 +764,70 @@ ReturnCode st25r3916GetRegsDump( t_st25r3916Regs* regDump )
 
 
 /*******************************************************************************/
+ReturnCode st25r3916RuntimeGetRegsDump( st25r3916RuntimeRegs* regDump )
+{
+    uint8_t regIt;
+
+    if( regDump == NULL )
+    {
+        return RFAL_ERR_PARAM;
+    }
+    if( !st25r3916RuntimeIsSt25r3916() && !st25r3916RuntimeIsSt25r3916B() )
+    {
+        return RFAL_ERR_WRONG_STATE;
+    }
+
+    RFAL_MEMSET( regDump, 0x00, sizeof(*regDump) );
+
+    /* Dump all contiguous registers on Space A. */
+    for( regIt = ST25R3916_REG_IO_CONF1; regIt <= ST25R3916_REG_IC_IDENTITY; regIt++ )
+    {
+        st25r3916ReadRegister( regIt, &regDump->RsA[regIt] );
+    }
+
+    regIt = 0U;
+
+    /* Read the common non-consecutive Space-B registers. */
+    st25r3916ReadRegister( ST25R3916_REG_EMD_SUP_CONF,      &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_SUBC_START_TIME,   &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_P2P_RX_CONF,       &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_CORR_CONF1,        &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_CORR_CONF2,        &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_SQUELCH_TIMER,     &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_FIELD_ON_GT,       &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_AUX_MOD,           &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_TX_DRIVER_TIMING,  &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_RES_AM_MOD,        &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_TX_DRIVER_STATUS,  &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_REGULATOR_RESULT,  &regDump->RsB[regIt++] );
+
+    if( st25r3916RuntimeIsSt25r3916B() )
+    {
+        st25r3916ReadRegister( ST25R3916_REG_AWS_CONF1, &regDump->RsB[regIt++] );
+        st25r3916ReadRegister( ST25R3916_REG_AWS_CONF2, &regDump->RsB[regIt++] );
+    }
+
+    st25r3916ReadRegister( ST25R3916_REG_OVERSHOOT_CONF1,  &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_OVERSHOOT_CONF2,  &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_UNDERSHOOT_CONF1, &regDump->RsB[regIt++] );
+    st25r3916ReadRegister( ST25R3916_REG_UNDERSHOOT_CONF2, &regDump->RsB[regIt++] );
+
+    if( st25r3916RuntimeIsSt25r3916B() )
+    {
+        st25r3916ReadRegister( ST25R3916_REG_AWS_TIME1,  &regDump->RsB[regIt++] );
+        st25r3916ReadRegister( ST25R3916_REG_AWS_TIME2,  &regDump->RsB[regIt++] );
+        st25r3916ReadRegister( ST25R3916_REG_AWS_TIME3,  &regDump->RsB[regIt++] );
+        st25r3916ReadRegister( ST25R3916_REG_AWS_TIME4,  &regDump->RsB[regIt++] );
+        st25r3916ReadRegister( ST25R3916_REG_AWS_TIME5,  &regDump->RsB[regIt++] );
+        st25r3916ReadRegister( ST25R3916_REG_AWS_RC_CAL, &regDump->RsB[regIt++] );
+    }
+
+    regDump->RsBCount = regIt;
+    return rfalPlatformIsHealthy() ? RFAL_ERR_NONE : RFAL_ERR_IO;
+}
+
+
+/*******************************************************************************/
 bool st25r3916IsCmdValid( uint8_t cmd )
 {
     if( (!((cmd >= ST25R3916_CMD_SET_DEFAULT)             && (cmd <= ST25R3916_CMD_RESPONSE_RF_COLLISION_N)))   &&

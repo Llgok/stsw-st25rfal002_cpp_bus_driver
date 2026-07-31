@@ -3,7 +3,6 @@
 ## **[English](./README.md) | 中文**
 
 [![Release](https://img.shields.io/github/v/release/Llgok/stsw-st25rfal002_cpp_bus_driver?style=flat-square)](https://github.com/Llgok/stsw-st25rfal002_cpp_bus_driver/releases)
-[![License](https://img.shields.io/github/license/Llgok/stsw-st25rfal002_cpp_bus_driver?style=flat-square)](./LICENSE)
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v5.5.3%2B-ff6f00?style=flat-square)](https://github.com/espressif/esp-idf)
 
 `stsw-st25rfal002_cpp_bus_driver` 是 ST 官方 STSW-ST25RFAL002 RF/NFC
@@ -30,6 +29,8 @@ RFAL 生命周期，同时保留官方 RFAL API。
 - 为通信、RFAL Worker 和中断状态提供多任务并发保护。
 - 由传入的总线对象自动选择 I2C 或 SPI，并通过 `IC_IDENTITY` 自动识别
   ST25R3916 或 ST25R3916B。
+- 自动加载对应型号的模拟配置和 DPO 表。DPO 初始化后默认保持关闭，需要时由
+  应用显式开启。
 - 通过一个使用 C 语言链接的聚合头文件公开官方公共 API。
 
 公开头文件、构建配置和随库提供的官方 RFAL 源码，是当前支持功能的准确信息来源。
@@ -90,6 +91,22 @@ git submodule update --init --recursive
 
 无需通过 Kconfig 或构造函数选择芯片型号。`Init()` 会先读取 `IC_IDENTITY`，
 然后自动加载 ST25R3916 或 ST25R3916B 对应的初始化、模拟配置和 DPO 参数。
+驱动会执行 `rfalDpoInitialize()`，但动态功率调整仍保持关闭；需要使用时由应用
+调用 `rfalDpoSetEnabled(true)`。
+
+应用构建配置不要定义 `ST25R3916`、`ST25R3916B`，也不要关闭动态模拟配置或
+DPO 功能。这些宏由组件统一管理，实际芯片始终根据 `IC_IDENTITY` 在运行时选择。
+
+官方 `t_st25r3916Regs` 的 Space-B 数组长度由编译期型号决定。需要按照运行时
+识别结果读取完整寄存器时，应使用 `st25r3916RuntimeGetRegsDump()`；该接口在
+ST25R3916B 上会读取全部 24 个 Space-B 寄存器：
+
+```cpp
+st25r3916RuntimeRegs registers = {};
+if (st25r3916RuntimeGetRegsDump(&registers) == RFAL_ERR_NONE) {
+  // ST25R3916 的 RsBCount 为16，ST25R3916B 为24。
+}
+```
 
 ### 创建 SPI 总线
 
@@ -166,11 +183,16 @@ while (true) {
 - 直接管理底层 RFAL API 时才单独调用 `Worker()`。
 - `Deinit(false)` 只释放当前对象使用的 I2C/SPI 设备。
 - `Deinit(true)` 还会请求删除底层总线，仅当当前对象独占总线时才能使用。
+- 调用 `Deinit()` 或销毁对象前，必须先停止所有正在调用 `Worker()`、
+  `NfcWorker()` 或直接 RFAL/芯片 API 的任务；资源释放不能与协议栈或芯片访问并发。
+- `Deinit()` 返回平台 I/O 错误时，对象会保留释放失败的资源状态，可以再次调用
+  `Deinit()` 重试清理。
 - 官方协议栈使用全局内部状态，因此同一时间只能初始化一个 `St25r3916x` 对象。
 - `platform_error()` 用于报告官方 `ReturnCode` 接口以下的总线和平台错误。
 - 中断任务使用系统最高可用优先级。调用 RFAL 的任务不得长期关闭调度器，也不得
   以最高优先级持续忙等。
-- 发生总线或平台错误后，Worker 循环必须停止推进状态机。
+- C++ 的 `Worker()` 和 `NfcWorker()` 会在检测到平台错误后停止推进状态机；
+  直接调用官方 RFAL/芯片 API 的任务也必须在发现错误后退出。
 
 ## 注意事项
 
