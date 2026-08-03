@@ -50,4 +50,3 @@
 #ifndef ST25R3916_IRQ_MASK_WCAP
 #define ST25R3916_IRQ_MASK_WCAP ((uint32_t)0x00010000U)
 #endif
-

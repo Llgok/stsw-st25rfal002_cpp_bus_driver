@@ -2,7 +2,7 @@
  * @Description: STSW-ST25RFAL002 ESP-IDF 平台适配接口
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:38:14
- * @LastEditTime: 2026-07-31 09:03:47
+ * @LastEditTime: 2026-08-03 16:16:11
  * @License: GPL 3.0
  */
 #pragma once
@@ -15,8 +15,7 @@
 // 使用 ST25R3916 作为官方公共类型和常量的编译基础；型号相关运行行为仍由
 // IC_IDENTITY 自动选择。只有生成 ST25R3916B 配置表的内部源文件允许定义
 // ST25R3916B，应用和工程构建配置不得再选择编译期芯片型号。
-#if defined(ST25R3916B) && \
-    !defined(ST25R3916_RUNTIME_BUILD_ST25R3916B_TABLE)
+#if defined(ST25R3916B) && !defined(ST25R3916_RUNTIME_BUILD_ST25R3916B_TABLE)
 #error \
     "Do not define ST25R3916B globally; the driver selects ST25R3916/ST25R3916B at runtime"
 #endif

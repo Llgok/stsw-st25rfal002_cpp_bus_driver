@@ -2,7 +2,7 @@
  * @Description: STSW-ST25RFAL002 的 ESP-IDF 平台实现
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:40:45
- * @LastEditTime: 2026-07-31 09:03:47
+ * @LastEditTime: 2026-08-03 16:16:10
  * @License: GPL 3.0
  */
 #include <array>
@@ -78,14 +78,12 @@ bool RfalPlatformContext::Init(uint32_t frequency_hz) {
         "Previous ST25R3916 platform cleanup is incomplete");
     return false;
   }
-  const bool valid_i2c =
-      transport_ == Transport::kI2c && i2c_bus_ != nullptr &&
-      address_ <= 0x7F && frequency_hz > 0 &&
-      frequency_hz <= kMaximumI2cFrequencyHz;
-  const bool valid_spi =
-      transport_ == Transport::kSpi && spi_bus_ != nullptr &&
-      chip_select_pin_ >= 0 && frequency_hz > 0 &&
-      frequency_hz <= kMaximumSpiFrequencyHz;
+  const bool valid_i2c = transport_ == Transport::kI2c && i2c_bus_ != nullptr &&
+                         address_ <= 0x7F && frequency_hz > 0 &&
+                         frequency_hz <= kMaximumI2cFrequencyHz;
+  const bool valid_spi = transport_ == Transport::kSpi && spi_bus_ != nullptr &&
+                         chip_select_pin_ >= 0 && frequency_hz > 0 &&
+                         frequency_hz <= kMaximumSpiFrequencyHz;
   if (tool_ == nullptr || interrupt_pin_ < 0 || (!valid_i2c && !valid_spi)) {
     SetError(PlatformError::kInvalidConfiguration,
         "Invalid ST25R3916 platform configuration");
@@ -219,9 +217,9 @@ void RfalPlatformContext::UnprotectWorker() {
 }
 
 void RfalPlatformContext::InitializeInterruptPin() {
-  if (tool_ == nullptr ||
-      !tool_->SetGpioMode(interrupt_pin_, cpp_bus_driver::Tool::GpioMode::kInput,
-          cpp_bus_driver::Tool::GpioStatus::kPulldown)) {
+  if (tool_ == nullptr || !tool_->SetGpioMode(interrupt_pin_,
+                              cpp_bus_driver::Tool::GpioMode::kInput,
+                              cpp_bus_driver::Tool::GpioStatus::kPulldown)) {
     SetError(PlatformError::kGpioFailed,
         "Failed to configure the ST25R3916 interrupt GPIO");
   }
@@ -376,8 +374,8 @@ void RfalPlatformContext::SpiTransceive(
           "ST25R3916 SPI transaction is too large");
       return;
     }
-    result =
-        spi_bus_->WriteRead(transmit_buffer, spi_receive_buffer_.data(), length);
+    result = spi_bus_->WriteRead(
+        transmit_buffer, spi_receive_buffer_.data(), length);
     if (result) {
       std::memcpy(receive_buffer, spi_receive_buffer_.data(), length);
     }
@@ -416,8 +414,8 @@ void RfalPlatformContext::LogV(const char* format, va_list arguments) const {
 void RfalPlatformContext::SetError(PlatformError error, const char* message) {
   error_.store(error);
   if (tool_ != nullptr && message != nullptr) {
-    tool_->LogMessage(cpp_bus_driver::Tool::LogLevel::kError, __FILE__, __LINE__,
-        "%s\n", message);
+    tool_->LogMessage(cpp_bus_driver::Tool::LogLevel::kError, __FILE__,
+        __LINE__, "%s\n", message);
   }
 }
 

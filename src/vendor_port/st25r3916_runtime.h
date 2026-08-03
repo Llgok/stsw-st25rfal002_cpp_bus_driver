@@ -66,4 +66,3 @@ ReturnCode st25r3916RuntimeGetRegsDump(st25r3916RuntimeRegs* regDump);
 #ifdef __cplusplus
 }
 #endif
-
