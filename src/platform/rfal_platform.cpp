@@ -671,7 +671,9 @@ extern "C" uint32_t rfalPlatformGetSystemTick(void) {
 }
 
 extern "C" uint32_t rfalPlatformTimerCreate(uint16_t timeout_ms) {
-  return rfalPlatformGetSystemTick() + timeout_ms;
+  const uint32_t resolution_compensation_ms = timeout_ms == 0 ? 0 : 1;
+  // 系统时钟会向下截断到整毫秒，补偿一个时钟单位，保证短超时不会提前结束。
+  return rfalPlatformGetSystemTick() + timeout_ms + resolution_compensation_ms;
 }
 
 extern "C" bool rfalPlatformTimerIsExpired(uint32_t timer) {
