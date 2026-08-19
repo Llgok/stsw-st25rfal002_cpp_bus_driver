@@ -59,6 +59,10 @@ idf_component_register(
         "freertos"
 )
 
+# 启用 ST25R3916X 的 RFAL Power Down 支持。
+target_compile_definitions(${COMPONENT_LIB} PRIVATE
+        RFAL_FEATURE_LOWPOWER_MODE=1)
+
 # 官方代码和本地 RFAL 移植文件保持使用 ISO C 编译。
 set_source_files_properties(
         ${rfal_sources}

@@ -38,6 +38,7 @@ ReturnCode St25r3916x::Init() {
 }
 
 ReturnCode St25r3916x::Init(uint32_t frequency_hz) {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
   if (initialized_) {
     return RFAL_ERR_NONE;
   }
@@ -95,21 +96,26 @@ ReturnCode St25r3916x::Init(uint32_t frequency_hz) {
   }
 
   initialized_ = true;
+  low_power_mode_active_ = false;
   return RFAL_ERR_NONE;
 }
 
 ReturnCode St25r3916x::Deinit(bool delete_bus) {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
   if (platform_ == nullptr) {
     return RFAL_ERR_INVALID_HANDLE;
   }
 
   ReturnCode result = RFAL_ERR_NONE;
   if (initialized_) {
+    // rfalDeinitialize() 会直接停止当前活动并进入 Power Down，
+    // 无需先退出低功耗模式再短暂唤醒振荡器。
     result = rfalDeinitialize();
     if (result == RFAL_ERR_NONE && !platform_->healthy()) {
       result = RFAL_ERR_IO;
     }
     initialized_ = false;
+    low_power_mode_active_ = false;
   }
   const bool platform_deinitialized = platform_->Deinit(delete_bus);
   if (!platform_deinitialized) {
@@ -123,33 +129,89 @@ ReturnCode St25r3916x::Deinit(bool delete_bus) {
   return result;
 }
 
-bool St25r3916x::initialized() const { return initialized_; }
+ReturnCode St25r3916x::StartLowPowerMode(rfalLpMode mode) {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
+  if (!initialized_ || platform_ == nullptr) {
+    return RFAL_ERR_WRONG_STATE;
+  }
+  if (mode != RFAL_LP_MODE_PD) {
+    return RFAL_ERR_NOTSUPP;
+  }
+  if (low_power_mode_active_) {
+    return RFAL_ERR_NONE;
+  }
+  if (!platform_->healthy()) {
+    return RFAL_ERR_IO;
+  }
+
+  const ReturnCode result = rfalLowPowerModeStart(mode);
+  if (result != RFAL_ERR_NONE) {
+    return result;
+  }
+  // RFAL 成功后立即同步软件状态；平台错误是独立的返回值，
+  // 不能让包装层与 RFAL 内部的低功耗状态分离。
+  low_power_mode_active_ = true;
+  return platform_->healthy() ? RFAL_ERR_NONE : RFAL_ERR_IO;
+}
+
+ReturnCode St25r3916x::StopLowPowerMode() {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
+  if (!initialized_ || platform_ == nullptr) {
+    return RFAL_ERR_WRONG_STATE;
+  }
+  if (!low_power_mode_active_) {
+    return RFAL_ERR_NONE;
+  }
+  if (!platform_->healthy()) {
+    return RFAL_ERR_IO;
+  }
+
+  const ReturnCode result = rfalLowPowerModeStop();
+  if (result != RFAL_ERR_NONE) {
+    return result;
+  }
+  low_power_mode_active_ = false;
+  return platform_->healthy() ? RFAL_ERR_NONE : RFAL_ERR_IO;
+}
+
+bool St25r3916x::initialized() const {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
+  return initialized_;
+}
 
 uint8_t St25r3916x::chip_identity() const {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
   return st25r3916RuntimeGetIdentity();
 }
 
 uint8_t St25r3916x::chip_revision() const {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
   return st25r3916RuntimeGetRevision();
 }
 
 bool St25r3916x::is_st25r3916b() const {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
   return st25r3916RuntimeIsSt25r3916B();
 }
 
 PlatformError St25r3916x::platform_error() const {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
   return platform_ == nullptr ? PlatformError::kInvalidConfiguration
                               : platform_->error();
 }
 
 void St25r3916x::Worker() {
-  if (initialized_ && platform_ != nullptr && platform_->healthy()) {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
+  if (initialized_ && !low_power_mode_active_ && platform_ != nullptr &&
+      platform_->healthy()) {
     rfalWorker();
   }
 }
 
 void St25r3916x::NfcWorker() {
-  if (initialized_ && platform_ != nullptr && platform_->healthy()) {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
+  if (initialized_ && !low_power_mode_active_ && platform_ != nullptr &&
+      platform_->healthy()) {
     rfalNfcWorker();
   }
 }

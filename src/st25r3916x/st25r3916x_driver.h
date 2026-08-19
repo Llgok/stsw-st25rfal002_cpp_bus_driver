@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 #include "bus/bus_guide.h"
 #include "platform/rfal_platform_status.h"
@@ -70,6 +71,19 @@ class St25r3916x final {
   ReturnCode Deinit(bool delete_bus = false);
 
   /**
+   * @brief 进入 RFAL 低功耗模式
+   * @param mode RFAL 低功耗模式；ST25R3916X 当前支持 Power Down
+   * @return 官方 RFAL 返回码
+   */
+  ReturnCode StartLowPowerMode(rfalLpMode mode = RFAL_LP_MODE_PD);
+
+  /**
+   * @brief 退出 RFAL 低功耗模式
+   * @return 官方 RFAL 返回码
+   */
+  ReturnCode StopLowPowerMode();
+
+  /**
    * @brief 查询 ST25R3916X 是否可以使用
    * @return Init() 成功后至 Deinit() 完成前返回 true
    */
@@ -100,7 +114,9 @@ class St25r3916x final {
 
  private:
   std::unique_ptr<RfalPlatformContext> platform_;
+  mutable std::recursive_mutex lifecycle_mutex_;
   bool initialized_ = false;
+  bool low_power_mode_active_ = false;
 };
 
 }  // namespace stsw_st25rfal002_cpp_bus_driver
