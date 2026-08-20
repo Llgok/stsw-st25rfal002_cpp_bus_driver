@@ -129,6 +129,22 @@ ReturnCode St25r3916x::Deinit(bool delete_bus) {
   return result;
 }
 
+ReturnCode St25r3916x::DeinitLocalResources(bool delete_bus) {
+  std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
+  if (platform_ == nullptr) {
+    return RFAL_ERR_INVALID_HANDLE;
+  }
+
+  initialized_ = false;
+  low_power_mode_active_ = false;
+  const bool platform_deinitialized = platform_->Deinit(delete_bus);
+  if (platform_deinitialized) {
+    platform_->Unbind();
+  }
+  st25r3916RuntimeReset();
+  return platform_deinitialized ? RFAL_ERR_NONE : RFAL_ERR_IO;
+}
+
 ReturnCode St25r3916x::StartLowPowerMode(rfalLpMode mode) {
   std::lock_guard<std::recursive_mutex> lock(lifecycle_mutex_);
   if (!initialized_ || platform_ == nullptr) {

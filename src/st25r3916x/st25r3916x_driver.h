@@ -71,6 +71,17 @@ class St25r3916x final {
   ReturnCode Deinit(bool delete_bus = false);
 
   /**
+   * @brief 在不访问芯片的情况下释放平台和总线资源
+   *
+   * 当芯片无法通信时，跳过 RFAL 反初始化和寄存器访问，
+   * 仅释放中断、任务及总线等本地资源。
+   *
+   * @param delete_bus 是否同时请求释放底层共享 I2C/SPI 总线
+   * @return 平台资源释放结果
+   */
+  ReturnCode DeinitLocalResources(bool delete_bus = false);
+
+  /**
    * @brief 进入 RFAL 低功耗模式
    * @param mode RFAL 低功耗模式；ST25R3916X 当前支持 Power Down
    * @return 官方 RFAL 返回码
