@@ -234,7 +234,7 @@ void RfalPlatformContext::SetInterruptCallback(
 
   if (!tool_->InitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_),
           cpp_bus_driver::Tool::InterruptMode::kRising, InterruptHandler,
-          nullptr)) {
+          nullptr, cpp_bus_driver::Tool::GpioStatus::kPulldown)) {
     SetError(PlatformError::kInterruptFailed,
         "Failed to install the ST25R3916 interrupt handler");
     return;
