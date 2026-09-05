@@ -15,11 +15,11 @@
 
 namespace stsw_st25rfal002_cpp_bus_driver {
 
-St25r3916x::St25r3916x(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
+St25r3916x::St25r3916x(std::shared_ptr<cpp_bus_driver::I2cBusBase> bus,
     int32_t interrupt_pin, uint16_t address)
     : platform_(std::make_unique<RfalPlatformContext>(
           std::move(bus), interrupt_pin, address)) {}
-St25r3916x::St25r3916x(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
+St25r3916x::St25r3916x(std::shared_ptr<cpp_bus_driver::SpiBusBase> bus,
     int32_t interrupt_pin, int32_t chip_select_pin)
     : platform_(std::make_unique<RfalPlatformContext>(
           std::move(bus), interrupt_pin, chip_select_pin)) {}

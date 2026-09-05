@@ -11,7 +11,7 @@
 #include <memory>
 #include <mutex>
 
-#include "bus/bus_guide.h"
+#include "bus/bus_base.h"
 #include "platform/rfal_platform_status.h"
 
 extern "C" {
@@ -38,9 +38,9 @@ class St25r3916x final {
   static constexpr uint32_t kDefaultSpiFrequencyHz = 5000000;
   static constexpr uint32_t kMaximumSpiFrequencyHz = 10000000;
 
-  St25r3916x(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
+  St25r3916x(std::shared_ptr<cpp_bus_driver::I2cBusBase> bus,
       int32_t interrupt_pin, uint16_t address = kDefaultI2cAddress);
-  St25r3916x(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
+  St25r3916x(std::shared_ptr<cpp_bus_driver::SpiBusBase> bus,
       int32_t interrupt_pin, int32_t chip_select_pin);
 
   ~St25r3916x();

@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "bus/bus_guide.h"
+#include "bus/bus_base.h"
 #include "esp_attr.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -41,9 +41,9 @@ class RfalPlatformContext final {
     kSpi,
   };
 
-  RfalPlatformContext(std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus,
+  RfalPlatformContext(std::shared_ptr<cpp_bus_driver::I2cBusBase> bus,
       int32_t interrupt_pin, uint16_t address);
-  RfalPlatformContext(std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus,
+  RfalPlatformContext(std::shared_ptr<cpp_bus_driver::SpiBusBase> bus,
       int32_t interrupt_pin, int32_t chip_select_pin);
 
   ~RfalPlatformContext();
@@ -248,9 +248,9 @@ class RfalPlatformContext final {
   static std::atomic<TaskHandle_t> interrupt_task_for_isr_;
 
   Transport transport_;
-  std::shared_ptr<cpp_bus_driver::Tool> tool_;
-  std::shared_ptr<cpp_bus_driver::BusI2cGuide> i2c_bus_;
-  std::shared_ptr<cpp_bus_driver::BusSpiGuide> spi_bus_;
+  std::shared_ptr<cpp_bus_driver::PlatformHal> platform_hal_;
+  std::shared_ptr<cpp_bus_driver::I2cBusBase> i2c_bus_;
+  std::shared_ptr<cpp_bus_driver::SpiBusBase> spi_bus_;
   int32_t interrupt_pin_;
   uint16_t address_;
   int32_t chip_select_pin_;

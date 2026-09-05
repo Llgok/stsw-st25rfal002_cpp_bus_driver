@@ -72,7 +72,7 @@ git clone https://github.com/Llgok/stsw-st25rfal002_cpp_bus_driver.git
 然后包含统一入口头文件：
 
 ```cpp
-#include "stsw_st25rfal002_cpp_bus_driver_library.h"
+#include "stsw_st25rfal002_cpp_bus_driver.h"
 ```
 
 仅需要部分功能时，也可以直接包含对应的官方 RFAL 或 C++ 封装头文件。可用入口以
@@ -116,8 +116,8 @@ if (st25r3916RuntimeGetRegsDump(&registers) == RFAL_ERR_NONE) {
 ```cpp
 #include <memory>
 
-#include "cpp_bus_driver_library.h"
-#include "stsw_st25rfal002_cpp_bus_driver_library.h"
+#include "cpp_bus_driver.h"
+#include "stsw_st25rfal002_cpp_bus_driver.h"
 
 auto spi_bus = std::make_shared<cpp_bus_driver::HardwareSpi>(
     mosi_pin, sclk_pin, miso_pin, SPI2_HOST, 1);

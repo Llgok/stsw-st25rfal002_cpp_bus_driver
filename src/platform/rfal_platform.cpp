@@ -21,20 +21,20 @@ std::atomic<TaskHandle_t> RfalPlatformContext::interrupt_task_for_isr_ =
     nullptr;
 
 RfalPlatformContext::RfalPlatformContext(
-    std::shared_ptr<cpp_bus_driver::BusI2cGuide> bus, int32_t interrupt_pin,
+    std::shared_ptr<cpp_bus_driver::I2cBusBase> bus, int32_t interrupt_pin,
     uint16_t address)
     : transport_(Transport::kI2c),
-      tool_(bus),
+      platform_hal_(bus),
       i2c_bus_(std::move(bus)),
       interrupt_pin_(interrupt_pin),
       address_(address),
       chip_select_pin_(-1) {}
 
 RfalPlatformContext::RfalPlatformContext(
-    std::shared_ptr<cpp_bus_driver::BusSpiGuide> bus, int32_t interrupt_pin,
+    std::shared_ptr<cpp_bus_driver::SpiBusBase> bus, int32_t interrupt_pin,
     int32_t chip_select_pin)
     : transport_(Transport::kSpi),
-      tool_(bus),
+      platform_hal_(bus),
       spi_bus_(std::move(bus)),
       interrupt_pin_(interrupt_pin),
       address_(0),
@@ -84,7 +84,7 @@ bool RfalPlatformContext::Init(uint32_t frequency_hz) {
   const bool valid_spi = transport_ == Transport::kSpi && spi_bus_ != nullptr &&
                          chip_select_pin_ >= 0 && frequency_hz > 0 &&
                          frequency_hz <= kMaximumSpiFrequencyHz;
-  if (tool_ == nullptr || interrupt_pin_ < 0 || (!valid_i2c && !valid_spi)) {
+  if (platform_hal_ == nullptr || interrupt_pin_ < 0 || (!valid_i2c && !valid_spi)) {
     SetError(PlatformError::kInvalidConfiguration,
         "Invalid ST25R3916 platform configuration");
     return false;
@@ -131,8 +131,8 @@ bool RfalPlatformContext::Deinit(bool delete_bus) {
 
   if (interrupt_initialized_) {
     const bool interrupt_deinitialized =
-        tool_->DeinitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_));
-    // Tool::DeinitGpioInterrupt() 会在单步失败后继续执行其余清理，因此一次
+        platform_hal_->DeinitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_));
+    // PlatformHal::DeinitGpioInterrupt() 会在单步失败后继续执行其余清理，因此一次
     // 调用后不再重复移除同一个 ISR；首次失败仍通过返回值报告给上层。
     interrupt_initialized_ = false;
     if (!interrupt_deinitialized) {
@@ -217,9 +217,9 @@ void RfalPlatformContext::UnprotectWorker() {
 }
 
 void RfalPlatformContext::InitializeInterruptPin() {
-  if (tool_ == nullptr || !tool_->SetGpioMode(interrupt_pin_,
-                              cpp_bus_driver::Tool::GpioMode::kInput,
-                              cpp_bus_driver::Tool::GpioStatus::kPulldown)) {
+  if (platform_hal_ == nullptr || !platform_hal_->SetGpioMode(interrupt_pin_,
+                              cpp_bus_driver::PlatformHal::GpioMode::kInput,
+                              cpp_bus_driver::PlatformHal::GpioStatus::kPulldown)) {
     SetError(PlatformError::kGpioFailed,
         "Failed to configure the ST25R3916 interrupt GPIO");
   }
@@ -228,13 +228,13 @@ void RfalPlatformContext::InitializeInterruptPin() {
 void RfalPlatformContext::SetInterruptCallback(
     RfalPlatformInterruptCallback callback) {
   interrupt_callback_.store(callback);
-  if (callback == nullptr || interrupt_initialized_ || tool_ == nullptr) {
+  if (callback == nullptr || interrupt_initialized_ || platform_hal_ == nullptr) {
     return;
   }
 
-  if (!tool_->InitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_),
-          cpp_bus_driver::Tool::InterruptMode::kRising, InterruptHandler,
-          nullptr, cpp_bus_driver::Tool::GpioStatus::kPulldown)) {
+  if (!platform_hal_->InitGpioInterrupt(static_cast<uint32_t>(interrupt_pin_),
+          cpp_bus_driver::PlatformHal::InterruptMode::kRising, InterruptHandler,
+          nullptr, cpp_bus_driver::PlatformHal::GpioStatus::kPulldown)) {
     SetError(PlatformError::kInterruptFailed,
         "Failed to install the ST25R3916 interrupt handler");
     return;
@@ -250,7 +250,7 @@ void RfalPlatformContext::SetInterruptCallback(
 bool RfalPlatformContext::InterruptPinIsHigh() const {
   // 官方中断处理会在 INT 保持高电平时持续读取中断寄存器。总线或平台已经
   // 失败时停止继续轮询，避免无法清除 INT 导致最高优先级中断任务持续循环。
-  return healthy() && tool_ != nullptr && tool_->GpioRead(interrupt_pin_);
+  return healthy() && platform_hal_ != nullptr && platform_hal_->GpioRead(interrupt_pin_);
 }
 
 void RfalPlatformContext::I2cStart() {
@@ -388,33 +388,33 @@ void RfalPlatformContext::SpiTransceive(
 }
 
 uint32_t RfalPlatformContext::GetSystemTick() const {
-  if (tool_ == nullptr) {
+  if (platform_hal_ == nullptr) {
     return 0;
   }
-  return static_cast<uint32_t>(tool_->GetSystemTimeMs());
+  return static_cast<uint32_t>(platform_hal_->GetSystemTimeMs());
 }
 
 void RfalPlatformContext::Delay(uint32_t delay_ms) const {
-  if (tool_ != nullptr) {
-    tool_->DelayMs(delay_ms);
+  if (platform_hal_ != nullptr) {
+    platform_hal_->DelayMs(delay_ms);
   }
 }
 
 void RfalPlatformContext::LogV(const char* format, va_list arguments) const {
-  if (tool_ == nullptr || format == nullptr) {
+  if (platform_hal_ == nullptr || format == nullptr) {
     return;
   }
 
   std::array<char, 512> message = {};
   std::vsnprintf(message.data(), message.size(), format, arguments);
-  tool_->LogMessage(cpp_bus_driver::Tool::LogLevel::kInfo, __FILE__, __LINE__,
+  platform_hal_->LogMessage(cpp_bus_driver::Logger::LogLevel::kInfo, __FILE__, __LINE__,
       "%s", message.data());
 }
 
 void RfalPlatformContext::SetError(PlatformError error, const char* message) {
   error_.store(error);
-  if (tool_ != nullptr && message != nullptr) {
-    tool_->LogMessage(cpp_bus_driver::Tool::LogLevel::kError, __FILE__,
+  if (platform_hal_ != nullptr && message != nullptr) {
+    platform_hal_->LogMessage(cpp_bus_driver::Logger::LogLevel::kError, __FILE__,
         __LINE__, "%s\n", message);
   }
 }
