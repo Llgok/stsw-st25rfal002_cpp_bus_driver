@@ -143,7 +143,7 @@ I2C 使用同一个类的另一个构造函数；传入 I2C 总线、中断引�
 无需设置任何传输宏：
 
 ```cpp
-std::shared_ptr<cpp_bus_driver::BusI2cGuide> i2c_bus = /* 板级 I2C 总线 */;
+std::shared_ptr<cpp_bus_driver::I2cBusBase> i2c_bus = /* 板级 I2C 总线 */;
 stsw_st25rfal002_cpp_bus_driver::St25r3916x nfc(
     i2c_bus, interrupt_pin, 0x50);
 ```

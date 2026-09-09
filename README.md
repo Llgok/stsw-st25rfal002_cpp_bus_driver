@@ -154,7 +154,7 @@ I2C uses the other constructor of the same class. Supply the I2C bus, interrupt
 pin, and device address; no transport macro is required:
 
 ```cpp
-std::shared_ptr<cpp_bus_driver::BusI2cGuide> i2c_bus = /* board I2C bus */;
+std::shared_ptr<cpp_bus_driver::I2cBusBase> i2c_bus = /* board I2C bus */;
 stsw_st25rfal002_cpp_bus_driver::St25r3916x nfc(
     i2c_bus, interrupt_pin, 0x50);
 ```
