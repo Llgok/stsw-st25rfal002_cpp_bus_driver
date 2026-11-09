@@ -1,5 +1,5 @@
 version: "1.1.0"
-license: "GPL-3.0 AND LicenseRef-SLA0051"
+license: "AGPL-3.0 AND LicenseRef-SLA0051"
 description: "STSW-ST25RFAL002 bridge for cpp_bus_driver."
 url: https://github.com/Llgok/stsw-st25rfal002_cpp_bus_driver
 

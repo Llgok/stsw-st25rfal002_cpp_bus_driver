@@ -2,8 +2,7 @@
  * @Description: ST25R3916X 官方 RFAL 协议栈 C++ 生命周期封装
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:23:15
- * @LastEditTime: 2026-07-31 09:03:47
- * @License: GPL 3.0
+ * @LastEditTime: 2026-11-09 10:05:08
  */
 #pragma once
 

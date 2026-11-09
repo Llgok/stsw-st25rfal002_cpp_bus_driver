@@ -2,8 +2,7 @@
  * @Description: STSW-ST25RFAL002 的 ESP-IDF 平台实现
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:40:45
- * @LastEditTime: 2026-08-03 16:16:10
- * @License: GPL 3.0
+ * @LastEditTime: 2026-11-09 10:05:08
  */
 #include <array>
 #include <cstdarg>

@@ -2,8 +2,7 @@
  * @Description: STSW-ST25RFAL002 桥接组件统一公开头文件
  * @Author: LILYGO_L
  * @Date: 2026-07-15 09:23:16
- * @LastEditTime: 2026-07-30 18:24:23
- * @License: GPL 3.0
+ * @LastEditTime: 2026-11-09 10:05:08
  */
 #pragma once
 
