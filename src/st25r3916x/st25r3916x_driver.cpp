@@ -1,8 +1,5 @@
 /*
  * @Description: ST25R3916X 官方 RFAL 协议栈 C++ 生命周期实现
- * @Author: LILYGO_L
- * @Date: 2026-07-15 09:25:13
- * @LastEditTime: 2026-11-09 10:05:08
  */
 #include "st25r3916x/st25r3916x_driver.h"
 

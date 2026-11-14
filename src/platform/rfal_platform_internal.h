@@ -1,8 +1,5 @@
 /*
  * @Description: RFAL 平台接口的 ESP-IDF 内部实现
- * @Author: LILYGO_L
- * @Date: 2026-07-15 09:38:14
- * @LastEditTime: 2026-11-09 10:05:08
  */
 #pragma once
 

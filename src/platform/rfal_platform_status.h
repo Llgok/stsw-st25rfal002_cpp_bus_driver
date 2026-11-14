@@ -1,8 +1,5 @@
 /*
  * @Description: ST25RFAL 平台桥接层状态定义
- * @Author: LILYGO_L
- * @Date: 2026-07-15 09:23:10
- * @LastEditTime: 2026-11-09 10:05:08
  */
 #pragma once
 
